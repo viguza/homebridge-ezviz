@@ -1,5 +1,5 @@
 {
-  "name": "homebridge-ezviz",
+  "name": "@viguza/homebridge-ezviz",
   "displayName": "EZVIZ Homebridge Plugin",
   "type": "module",
   "version": "1.0.0",
