@@ -1,22 +1,23 @@
 {
-  "name": "homebridge-plugin-name",
-  "displayName": "Plugin Name",
+  "name": "homebridge-ezviz",
+  "displayName": "EZVIZ Homebridge Plugin",
   "type": "module",
   "version": "1.0.0",
   "private": true,
   "description": "A short description about what your plugin does.",
-  "author": "Your Name",
+  "author": "Victor Guzman",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/USERNAME/GITHUB_PROJECT_NAME#readme",
+  "homepage": "https://github.com/viguza/homebridge-ezviz#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "https://github.com/viguza/homebridge-ezviz.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com/viguza/homebridge-ezviz/issues"
   },
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "ezviz"
   ],
   "main": "dist/index.js",
   "engines": {
@@ -25,6 +26,7 @@
   },
   "scripts": {
     "build": "rimraf ./dist && tsc",
+    "start": "homebridge -D",
     "lint": "eslint . --max-warnings=0",
     "prepublishOnly": "npm run lint && npm run build",
     "watch": "npm run build && npm link && nodemon"
@@ -42,6 +44,9 @@
     "typescript-eslint": "^8.12.2"
   },
   "dependencies": {
-    "homebridge-lib": "^7.1.0"
+    "axios": "^1.7.9",
+    "crypto": "^1.0.1",
+    "homebridge-lib": "^7.1.0",
+    "querystring": "^0.2.1"
   }
 }
