@@ -1,5 +1,5 @@
 import { PlatformConfig } from 'homebridge';
-import { Credentials } from './connection';
+import { Credentials } from './connection.js';
 
 interface DeviceConfig {
   serial: string;

@@ -18,7 +18,7 @@ import { sendRequest } from './ezviz-requests.js';
 
 export class EZVIZAPI {
   private config: EZVIZConfig;
-  private sessionId: string | null;
+  public sessionId: string | null;
   private log: Logging | undefined;
 
   constructor(config: EZVIZConfig, log?: Logging) {
@@ -43,7 +43,6 @@ export class EZVIZAPI {
       featureCode: emailHash,
       password: passHash,
     });
-  
     const config: AxiosRequestConfig = {
       method: 'post',
       url: `${this.config.domain}${EZVIZ_AUTH_ENDPOINT}`,
@@ -56,20 +55,20 @@ export class EZVIZAPI {
     };
   
     try {
-      const response = (await axios(config)).data;
-
-      if (response.retcode) {
-        this.log?.error(`Login error: ${response.retcode}`);
+      const response = await axios(config);
+      const auth = response.data;
+      if (auth.retcode) {
+        this.log?.error(`Login error: ${auth.retcode}`);
         return;
       }
   
-      if (response.meta?.code === 6002) {
+      if (auth.meta?.code === 6002) {
         this.log?.error('2 Factor Authentication accounts are not supported at this time.');
         return;
       }
   
-      if (response.loginSession?.sessionId) {
-        const login = response as Login;
+      if (auth.loginSession?.sessionId) {
+        const login = auth as Login;
         const credentials: Credentials = {
           sessionId: login.loginSession.sessionId,
           rfSessionId: login.loginSession.rfSessionId,
@@ -81,7 +80,8 @@ export class EZVIZAPI {
         return credentials;
       }
     } catch (error) {
-      this.log?.info('Unable to login');
+      this.log?.error('Unable to login', error);
+      throw error;
     }
   }
 
@@ -101,8 +101,14 @@ export class EZVIZAPI {
       }),
     };
   
-    const domain = (await axios(domainReq)).data as Domain;
-    return `https://${domain.domain}`;
+    try {
+      const response = await axios(domainReq);
+      const domain = response.data as Domain;
+      return `https://${domain.domain}`;
+    } catch (error) {
+      this.log?.error('Error fetching domain', error);
+      throw error;
+    }
   }
 
   async listDevices(): Promise<ListDevicesResponse | undefined> {
@@ -121,7 +127,8 @@ export class EZVIZAPI {
       const info = await sendRequest(this.config, this.config.domain, `${EZVIZ_DEVICES_ENDPOINT}?${query}`, 'GET');
       return info as ListDevicesResponse;
     } catch (error) {
-      console.error('Error fetching devices:', error);
+      this.log?.error('Error fetching devices', error);
+      throw error;
     }
   }
 
@@ -130,49 +137,64 @@ export class EZVIZAPI {
       await this.authenticate();
     }
 
-    try {
-      const config: AxiosRequestConfig = {
-        method: 'post',
-        url: `${this.config.domain}${EZVIZ_SWITCH_STATUS_ENDPOINT}`,
-        headers: {
-          'sessionid': this.sessionId,
-          'clienttype': EZVIZ_CLIENT_TYPE,
-          'user-agent': EZVIZ_USER_AGENT,
-        },
-        data: querystring.stringify({
-          channel: 0,
-          clientType: 1,
-          enable: value ? 1 : 0,
-          serial: serialNumber,
-          type: type,
-        }),
-      };
+    const config: AxiosRequestConfig = {
+      method: 'post',
+      url: `${this.config.domain}${EZVIZ_SWITCH_STATUS_ENDPOINT}`,
+      headers: {
+        'sessionid': this.sessionId,
+        'clienttype': EZVIZ_CLIENT_TYPE,
+        'user-agent': EZVIZ_USER_AGENT,
+      },
+      data: querystring.stringify({
+        channel: 0,
+        clientType: 1,
+        enable: value ? 1 : 0,
+        serial: serialNumber,
+        type: type,
+      }),
+    };
 
-      return (await axios(config)).data;
+    try {
+      const response = await axios(config);
+      return response.data;
     } catch (error) {
-      console.error('Error setting plug state:', error);
+      this.log?.error('Error setting switch state', error);
+      throw error;
     }
   }
 
-  async getSwitchState(serialNumber: string, type: number): Promise<boolean | undefined> {
+  async getSwitchState(serialNumber: string, type: number): Promise<boolean> {
     if (!this.sessionId) {
       await this.authenticate();
     }
 
-    try {
-      const deviceList = await this.listDevices();
-      const deviceInfo = deviceList?.deviceInfos?.find((device) => {
-        return device.deviceSerial === serialNumber;
-      });
-      if (deviceInfo?.status !== 1) {
-        return;
-      }
-      const deviceSwitch = deviceList?.SWITCH[serialNumber]?.find((device) => {
-        return device.type === type;
-      });
-      return deviceSwitch?.enable;
-    } catch (error) {
-      console.error('Error getting plug state:', error);
+    const deviceList = await this.listDevices();
+    if (!deviceList) {
+      const message = 'No devices found';
+      this.log?.debug(message);
+      throw new Error(message);
     }
+
+    const deviceInfo = deviceList.deviceInfos?.find((device) => device.deviceSerial === serialNumber);
+    if (!deviceInfo) {
+      const message = `Device with serial ${serialNumber} was not found`;
+      this.log?.debug(message);
+      throw new Error(message);
+    }
+
+    if (deviceInfo?.status !== 1) {
+      const message = `Device with serial ${serialNumber} is offline`;
+      this.log?.debug(message);
+      throw new Error(message);
+    }
+
+    const deviceSwitch = deviceList.SWITCH?.[serialNumber]?.find((device) => device.type === type);
+    if (!deviceSwitch) {
+      const message = `Switch for device serial ${serialNumber} was not found`;
+      this.log?.debug(message);
+      throw new Error(message);
+    }
+
+    return deviceSwitch?.enable;
   }
 }

@@ -31,17 +31,21 @@ export class SmartPlug {
   }
 
   async setOnState(value: CharacteristicValue) {
-    const action = value ? true : false;
-    await this.api.setSwitchState(this.deviceSerial, SwitchTypes.On, action);
+    try {
+      const action = value ? true : false;
+      await this.api.setSwitchState(this.deviceSerial, SwitchTypes.On, action);
+    } catch (error) {
+      this.platform.log.error('Unable to set switch state', error);
+    }
   }
 
   async getOnState(): Promise<CharacteristicValue> {
-    const state = await this.api.getSwitchState(this.deviceSerial, SwitchTypes.On);
-    if (state === undefined) {
-      this.platform.log.error(`${this.deviceName} seems to be unreachable`);
+    try {
+      return await this.api.getSwitchState(this.deviceSerial, SwitchTypes.On);
+    } catch (error) {
+      this.platform.log.error(`${this.deviceName} (${this.deviceSerial}) seems to be unreachable`);
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
-    return state;
   }
 
   getAccessory() {

@@ -27,7 +27,7 @@ export async function sendRequest<T>(
     'User-Agent': EZVIZ_USER_AGENT,
     'clientType': EZVIZ_CLIENT_TYPE,
     'Content-Type': method === 'POST' || method === 'PUT' ? 'application/x-www-form-urlencoded' : undefined,
-    'sessionId': credentials.sessionId || undefined,
+    'sessionId': credentials.sessionId,
   };
 
   const url = hostname + endpoint;
@@ -40,7 +40,8 @@ export async function sendRequest<T>(
   };
 
   try {
-    return (await axios(req)).data;
+    const response = await axios(req);
+    return response.data;
   } catch (error) {
     const axiosError = error as AxiosError;
     if (retries > 0 && axiosError.response?.status === 401) {

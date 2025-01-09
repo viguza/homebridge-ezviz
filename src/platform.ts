@@ -26,10 +26,13 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   }
 
   async didFinishLaunching(): Promise<void> {
-    const ezvizAPI = new EZVIZAPI(this.config);
-    await this.authenticate(ezvizAPI);
-    this.log.debug('Successful login');
-    await this.discoverDevices(ezvizAPI);
+    const ezvizAPI = new EZVIZAPI(this.config, this.log);
+    try {
+      await this.authenticate(ezvizAPI);
+      await this.discoverDevices(ezvizAPI);
+    } catch (error) {
+      this.log.error('Error during platform initialization', error);
+    }
 
     this.log.debug('Executed didFinishLaunching callback');
   }
@@ -44,8 +47,12 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       return;
     }
 
-    this.config.domain = await ezvizAPI.getDomain(region);
-    return await ezvizAPI.authenticate();
+    try {
+      this.config.domain = await ezvizAPI.getDomain(region);
+      return await ezvizAPI.authenticate();
+    } catch (error) {
+      this.log.error('Authentication failed', error);
+    }
   }
 
   configureAccessory(accessory: PlatformAccessory) {
@@ -54,42 +61,46 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   }
 
   async discoverDevices(ezvizAPI: EZVIZAPI) {
-    const devicesResponse = await ezvizAPI.listDevices();
-    if (devicesResponse?.deviceInfos && devicesResponse?.deviceInfos?.length > 0) {
-      for (const device of devicesResponse.deviceInfos) {
-        const uuid = this.api.hap.uuid.generate(device.deviceSerial);
+    try {
+      const devicesResponse = await ezvizAPI.listDevices();
+      if (devicesResponse?.deviceInfos && devicesResponse?.deviceInfos?.length > 0) {
+        for (const device of devicesResponse.deviceInfos) {
+          const uuid = this.api.hap.uuid.generate(device.deviceSerial);
 
-        const deviceType = DeviceTypes[device.deviceCategory as keyof typeof DeviceTypes];
-        if (!deviceType) {
-          this.log.info(`Device ${device.name} has an unsupported type ${device.deviceCategory}`);
-          continue;
-        }
-
-        const existingAccessory = this.accessories.get(uuid);
-        if (existingAccessory) {
-          this.log.info(`Restoring existing ${deviceType} from cache: ${existingAccessory.displayName}`);
-          if (deviceType === DeviceTypes.Socket) {
-            new SmartPlug(ezvizAPI, this, existingAccessory);
+          const deviceType = DeviceTypes[device.deviceCategory as keyof typeof DeviceTypes];
+          if (!deviceType) {
+            this.log.error(`Device ${device.name} has an unsupported type ${device.deviceCategory}`);
+            continue;
           }
-        } else {
-          this.log.info(`Adding new ${deviceType}: ${device.name}`);
-          if (deviceType === DeviceTypes.Socket) {
-            const accessory = new this.api.platformAccessory(device.name, uuid);
-            accessory.context.device = device;
-            this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-            new SmartPlug(ezvizAPI, this, accessory);
+
+          const existingAccessory = this.accessories.get(uuid);
+          if (existingAccessory) {
+            this.log.debug(`Restoring existing ${deviceType} from cache: ${existingAccessory.displayName}`);
+            if (deviceType === DeviceTypes.Socket) {
+              new SmartPlug(ezvizAPI, this, existingAccessory);
+            }
+          } else {
+            this.log.info(`Adding new ${deviceType}: ${device.name}`);
+            if (deviceType === DeviceTypes.Socket) {
+              const accessory = new this.api.platformAccessory(device.name, uuid);
+              accessory.context.device = device;
+              this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+              new SmartPlug(ezvizAPI, this, accessory);
+            }
           }
+
+          this.discoveredCacheUUIDs.push(uuid);
         }
-
-        this.discoveredCacheUUIDs.push(uuid);
       }
-    }
 
-    for (const [uuid, accessory] of this.accessories) {
-      if (!this.discoveredCacheUUIDs.includes(uuid)) {
-        this.log.info('Removing existing accessory from cache:', accessory.displayName);
-        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      for (const [uuid, accessory] of this.accessories) {
+        if (!this.discoveredCacheUUIDs.includes(uuid)) {
+          this.log.info('Removing existing accessory from cache:', accessory.displayName);
+          this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        }
       }
+    } catch (error) {
+      this.log.error('Error discovering devices', error);
     }
   }
 }
