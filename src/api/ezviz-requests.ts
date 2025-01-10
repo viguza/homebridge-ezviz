@@ -1,6 +1,6 @@
 import axios, { AxiosRequestConfig, Method, AxiosError } from 'axios';
 import querystring from 'querystring';
-import { Credentials, RefreshSession, RequestHeaders } from '../types/connection.js';
+import { Credentials, RefreshSession, RequestHeaders } from '../types/login.js';
 import { EZVIZConfig } from '../types/config.js';
 import { EZVIZ_CLIENT_TYPE, EZVIZ_USER_AGENT, API_ENDPOINT_REFRESH } from './ezviz-constants.js';
 

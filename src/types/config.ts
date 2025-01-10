@@ -1,14 +1,14 @@
 import { PlatformConfig } from 'homebridge';
-import { Credentials } from './connection.js';
+import { Credentials } from './login.js';
 
-interface DeviceConfig {
+export interface DeviceConfig {
   serial: string;
   code: string;
 }
 
-type Plug = DeviceConfig
+export type PlugConfig = DeviceConfig
 
-interface Camera extends DeviceConfig {
+export interface CameraConfig extends DeviceConfig {
   username: string;
 }
 
@@ -18,6 +18,6 @@ export interface EZVIZConfig extends PlatformConfig {
   password: string;
   credentials: Credentials;
   domain: string;
-  cameras?: Array<Camera>;
-  plugs?: Array<Plug>;
+  cameras?: Array<CameraConfig>;
+  plugs?: Array<PlugConfig>;
 }

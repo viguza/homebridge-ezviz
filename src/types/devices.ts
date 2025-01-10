@@ -1,26 +1,28 @@
+export interface ConnectionInfo {
+  localIp: string;
+  netIp: string;
+  localRtspPort: number;
+  netRtspPort: number;
+  localCmdPort: number;
+  netCmdPort: number;
+  localStreamPort: number;
+  netHttpPort: number;
+  localHttpPort: number;
+  netStreamPort: number;
+  netType: number;
+  wanIp: string;
+  upnp: boolean;
+}
+
 interface Connection {
-  [deviceSerial: string]: {
-      localIp: string;
-      netIp: string;
-      localRtspPort: number;
-      netRtspPort: number;
-      localCmdPort: number;
-      netCmdPort: number;
-      localStreamPort: number;
-      netHttpPort: number;
-      localHttpPort: number;
-      netStreamPort: number;
-      netType: number;
-      wanIp: string;
-      upnp: boolean;
-  };
+  [deviceSerial: string]: ConnectionInfo;
 }
 
 interface StatusOptionals {
   [key: string]: string;
 }
 
-interface DeviceStatus {
+export interface DeviceStatus {
   diskNum: number;
   diskState: string;
   globalStatus: number;
@@ -46,14 +48,14 @@ interface Meta {
   message: string;
 }
 
-interface SwitchItem {
+export interface SwitchItem {
   deviceSerial: string;
   channelNo: number;
   type: number;
   enable: boolean;
 }
 
-interface P2PItem {
+export interface P2PItem {
   ip: string;
   port: number;
 }
@@ -66,7 +68,7 @@ interface P2P {
   [deviceSerial: string]: P2PItem[];
 }
 
-interface ResourceInfo {
+export interface ResourceInfo {
   resourceId: string;
   resourceName: string;
   deviceSerial: string;
@@ -88,7 +90,7 @@ interface ResourceInfo {
   child: boolean;
 }
 
-interface DeviceInfo {
+export interface DeviceInfo {
   name: string;
   deviceSerial: string;
   fullSerial: string;

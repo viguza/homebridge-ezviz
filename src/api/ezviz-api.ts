@@ -2,7 +2,7 @@ import axios, { AxiosRequestConfig } from 'axios';
 import querystring from 'querystring';
 import crypto, { randomBytes } from 'crypto';
 import { Logging } from 'homebridge';
-import { Domain, Credentials, Login } from '../types/connection.js';
+import { Domain, Credentials, Login } from '../types/login.js';
 import { ListDevicesResponse } from '../types/devices.js';
 import { EZVIZConfig } from '../types/config.js';
 import { 

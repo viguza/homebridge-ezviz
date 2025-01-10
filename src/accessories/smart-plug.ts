@@ -15,12 +15,12 @@ export class SmartPlug {
     private readonly accessory: PlatformAccessory,
   ) {
     this.api = api;
-    this.deviceSerial = accessory.context.device.deviceSerial;
-    this.deviceName = accessory.context.device.name;
+    this.deviceSerial = accessory.context.device.DeviceInfo.deviceSerial;
+    this.deviceName = accessory.context.device.DeviceInfo.name;
 
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'EZVIZ')
-      .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.deviceSubCategory)
+      .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.DeviceInfo.deviceSubCategory)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.deviceSerial);
     
     const plugService = this.accessory.getService(this.platform.Service.Switch) || this.accessory.addService(this.platform.Service.Switch);
