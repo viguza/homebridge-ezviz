@@ -2,6 +2,7 @@ import { DeviceConfig } from './config.js';
 import { ConnectionInfo, DeviceStatus, SwitchItem, P2PItem, ResourceInfo, DeviceInfo } from './devices.js';
 
 export interface DeviceData {
+  UUID: string;
   Connection: ConnectionInfo;
   Status: DeviceStatus;
   Switches: SwitchItem[];

@@ -3,7 +3,7 @@ import { SmartPlug } from './accessories/smart-plug.js';
 import { IPCamera } from './accessories/ip-camera.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { EZVIZAPI } from './api/ezviz-api.js';
-import { EZVIZConfig, CameraConfig, DeviceConfig } from './types/config.js';
+import { EZVIZConfig, CameraConfig } from './types/config.js';
 import { Credentials } from './types/login.js';
 import { DeviceTypes } from './utils/enums.js';
 import { ListDevicesResponse } from './types/devices.js';
@@ -66,57 +66,35 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   async discoverDevices(ezvizAPI: EZVIZAPI) {
     try {
       const devicesResponse = await ezvizAPI.listDevices();
-      if (devicesResponse?.deviceInfos && devicesResponse?.deviceInfos?.length > 0) {
-        for (const device of devicesResponse.deviceInfos) {
-          const uuid = this.api.hap.uuid.generate(device.deviceSerial);
-
-          const deviceType = DeviceTypes[device.deviceCategory as keyof typeof DeviceTypes];
-          if (!deviceType) {
-            this.log.error(`Device ${device.name} has an unsupported type ${device.deviceCategory} and will be skipped`);
-            continue;
+      if (!devicesResponse) {
+        this.log.error('No devices found');
+        return;
+      }
+      const devices = this.extractDevicesData(devicesResponse);
+      for (const device of devices) {
+        const deviceType = DeviceTypes[device.DeviceInfo.deviceCategory as keyof typeof DeviceTypes];
+        const existingAccessory = this.accessories.get(device.UUID);
+        if (existingAccessory) {
+          this.log.debug(`Restoring existing ${deviceType} from cache: ${existingAccessory.displayName}`);
+          existingAccessory.context.device = device;
+          if (deviceType === DeviceTypes.Socket) {
+            new SmartPlug(ezvizAPI, this, existingAccessory);
+          } else if (deviceType === DeviceTypes.IPC) {
+            new IPCamera(ezvizAPI, this, existingAccessory);
           }
-
-          const existingAccessory = this.accessories.get(uuid);
-          if (existingAccessory && existingAccessory.context.device) {
-            existingAccessory.context.device = this.extractDeviceData(device.deviceSerial, devicesResponse);
+        } else {
+          this.log.info(`Adding new ${deviceType}: ${device.DeviceInfo.name}`);
+          const accessory = new this.api.platformAccessory(device.DeviceInfo.name, device.UUID);
+          accessory.context.device = device;
+          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+          if (deviceType === DeviceTypes.Socket) {
+            new SmartPlug(ezvizAPI, this, accessory);
+          } else if (deviceType === DeviceTypes.IPC) {
+            new IPCamera(ezvizAPI, this, accessory);
           }
-          if (existingAccessory) {
-            this.log.debug(`Restoring existing ${deviceType} from cache: ${existingAccessory.displayName}`);
-            if (deviceType === DeviceTypes.Socket) {
-              new SmartPlug(ezvizAPI, this, existingAccessory);
-            } else if (deviceType === DeviceTypes.IPC) {
-              const cameraConfig = (this.config.cameras || []).find((camera) => camera.serial === device.deviceSerial);
-              existingAccessory.context.device = this.extractDeviceData(device.deviceSerial, devicesResponse, cameraConfig);
-              new IPCamera(ezvizAPI, this, existingAccessory);
-            }
-          } else {
-            this.log.info(`Adding new ${deviceType}: ${device.name}`);
-            
-            if (deviceType === DeviceTypes.Socket) {
-              const accessory = new this.api.platformAccessory(device.name, uuid);
-              this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-              new SmartPlug(ezvizAPI, this, accessory);
-            } else if (deviceType === DeviceTypes.IPC) {
-              const cameraConfig = (this.config.cameras || []).find((camera) => camera.serial === device.deviceSerial);
-              if (!cameraConfig) {
-                this.log.info(`Camera ${device.name} (${device.deviceSerial}) is not configured and will be skipped`);
-                continue;
-              }
-              const error = this.cameraConfigErrors(cameraConfig);
-              if (error) {
-                this.log.info(`Device ${device.name} (${device.deviceSerial}) is not configured correctly and will be skipped: ${error}`);
-                continue;
-              }
-            
-              const accessory = new this.api.platformAccessory(device.name, uuid);
-              accessory.context.device = this.extractDeviceData(device.deviceSerial, devicesResponse, cameraConfig);
-              this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-              new IPCamera(ezvizAPI, this, accessory);
-            }
-          }
-
-          this.discoveredCacheUUIDs.push(uuid);
         }
+
+        this.discoveredCacheUUIDs.push(device.UUID);
       }
 
       for (const [uuid, accessory] of this.accessories) {
@@ -130,18 +108,49 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     }
   }
 
-  extractDeviceData(deviceSerial: string, devicesResponse: ListDevicesResponse, hbConfig?: DeviceConfig): DeviceData {
-    const data = {
-      Connection: devicesResponse.CONNECTION[deviceSerial],
-      Status: devicesResponse.STATUS[deviceSerial],
-      Switches: devicesResponse.SWITCH[deviceSerial],
-      P2P: devicesResponse.P2P[deviceSerial],
-      ResourceInfo: devicesResponse.resourceInfos.find((resource) => resource.deviceSerial === deviceSerial),
-      DeviceInfo: devicesResponse.deviceInfos.find((device) => device.deviceSerial === deviceSerial),
-      HBConfig: hbConfig,
-    } as DeviceData;
+  extractDevicesData(devicesResponse: ListDevicesResponse): DeviceData[] {
+    const devices: DeviceData[] = [];
 
-    return data;
+    for (const device of devicesResponse.deviceInfos) {
+      const uuid = this.api.hap.uuid.generate(device.deviceSerial);
+
+      const deviceType = DeviceTypes[device.deviceCategory as keyof typeof DeviceTypes];
+      if (!deviceType) {
+        this.log.error(`Device ${device.name} has an unsupported type ${device.deviceCategory} and will be skipped`);
+        continue;
+      }
+
+      let deviceConfig;
+      if (deviceType === DeviceTypes.Socket) {
+        deviceConfig = this.config.plugs?.find((plug) => plug.serial === device.deviceSerial);
+      } else if (deviceType === DeviceTypes.IPC) {
+        deviceConfig = this.config.cameras?.find((camera) => camera.serial === device.deviceSerial);
+        if (!deviceConfig) {
+          this.log.info(`Camera ${device.name} (${device.deviceSerial}) is not configured and will be skipped`);
+          continue;
+        }
+        const error = this.cameraConfigErrors(deviceConfig as CameraConfig);
+        if (error) {
+          this.log.info(`Device ${device.name} (${device.deviceSerial}) is not configured correctly and will be skipped: ${error}`);
+          continue;
+        }
+      }
+
+      const data = {
+        UUID: uuid,
+        Connection: devicesResponse.CONNECTION[device.deviceSerial],
+        Status: devicesResponse.STATUS[device.deviceSerial],
+        Switches: devicesResponse.SWITCH[device.deviceSerial],
+        P2P: devicesResponse.P2P[device.deviceSerial],
+        ResourceInfo: devicesResponse.resourceInfos.find((resource) => resource.deviceSerial === device.deviceSerial),
+        DeviceInfo: device,
+        HBConfig: deviceConfig,
+      } as DeviceData;
+
+      devices.push(data);
+    };
+
+    return devices;
   }
 
   cameraConfigErrors(camera: CameraConfig): string {
