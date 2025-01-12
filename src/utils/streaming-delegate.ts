@@ -100,7 +100,9 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     if (sleepSwitch?.enable) {
       this.getOfflineImage(callback);
     } else {
-      const url = `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@${this.deviceData.Connection.localIp}/Streaming/Channels/${this.deviceData.DeviceInfo.channelNumber}/`;
+      const url = `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@` +
+                  `${this.deviceData.Connection.localIp}/Streaming/Channels/` +
+                  `${this.deviceData.DeviceInfo.channelNumber}/`;
       getSnapshot(url)
         .then((snapshot) => {
           callback(undefined, snapshot);
@@ -198,7 +200,9 @@ export class StreamingDelegate implements CameraStreamingDelegate {
 
     let command = [
       '-i',
-      `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@${this.deviceData.Connection.localIp}/Streaming/Channels/${this.deviceData.DeviceInfo.channelNumber}/`,
+      `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@` +
+      `${this.deviceData.Connection.localIp}/Streaming/Channels/` +
+      `${this.deviceData.DeviceInfo.channelNumber}/`,
       '-map',
       '0:0',
       '-c:v',
@@ -259,7 +263,8 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       }
     } else {
       this.log.error(
-        'This version of FFMPEG does not support the audio codec \'libfdk_aac\'. You may need to recompile FFMPEG using \'--enable-libfdk_aac\' and restart homebridge.',
+        'This version of FFMPEG does not support the audio codec \'libfdk_aac\'. ' +
+        'You may need to recompile FFMPEG using \'--enable-libfdk_aac\' and restart homebridge.',
       );
     }
 
