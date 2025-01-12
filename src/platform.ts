@@ -32,6 +32,13 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     const ezvizAPI = new EZVIZAPI(this.config, this.log);
     try {
       await this.authenticate(ezvizAPI);
+      // EZVIZ needs to be reauthenticated about every 12 hours
+      if (this.config.credentials) {
+        setInterval(async () => {
+          this.log.debug('Reauthenticating to EZVIZ API');
+          await this.authenticate(ezvizAPI);
+        }, 3600000 * 12);
+      }
       await this.discoverDevices(ezvizAPI);
     } catch (error) {
       this.log.error('Error during platform initialization', error);
