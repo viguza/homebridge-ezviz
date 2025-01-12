@@ -3,7 +3,7 @@ import { Logging } from 'homebridge';
 import { EZVIZAPI } from '../../src/api/ezviz-api';
 import { EZVIZConfig } from '../../src/types/config';
 // import { Logging } from 'homebridge';
-import { Credentials } from '../../src/types/connection';
+import { Credentials } from '../../src/types/login';
 import { sendRequest } from '../../src/api/ezviz-requests';
 
 jest.mock('axios');

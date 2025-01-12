@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { sendRequest } from '../../src/api/ezviz-requests';
 import { EZVIZConfig } from '../../src/types/config';
-import { Credentials } from '../../src/types/connection';
+import { Credentials } from '../../src/types/login';
 import { API_ENDPOINT_REFRESH } from '../../src/api/ezviz-constants';
 
 jest.mock('axios');

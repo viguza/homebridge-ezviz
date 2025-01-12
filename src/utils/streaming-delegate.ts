@@ -100,13 +100,13 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     if (sleepSwitch?.enable) {
       this.getOfflineImage(callback);
     } else {
-      const url = `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@192.168.1.227/Streaming/Channels/${this.deviceData.DeviceInfo.channelNumber}/`;
+      const url = `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@${this.deviceData.Connection.localIp}/Streaming/Channels/${this.deviceData.DeviceInfo.channelNumber}/`;
       getSnapshot(url)
         .then((snapshot) => {
           callback(undefined, snapshot);
         })
         .catch((error) => {
-          this.log.error(`Error fetching snapshot for ${this.deviceData.DeviceInfo.name}`);
+          this.log.error(`Error fetching snapshot for ${this.deviceData.Name}`);
           callback(error);
         });
     }
@@ -198,7 +198,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
 
     let command = [
       '-i',
-      `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@192.168.1.227/Streaming/Channels/${this.deviceData.DeviceInfo.channelNumber}/`,
+      `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@${this.deviceData.Connection.localIp}/Streaming/Channels/${this.deviceData.DeviceInfo.channelNumber}/`,
       '-map',
       '0:0',
       '-c:v',
@@ -320,7 +320,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
         sessionId,
         false,
       );
-      this.log.info(`Streaming started for ${this.deviceData.DeviceInfo.name}`);
+      this.log.info(`Streaming started for ${this.deviceData.Name}`);
       this.ongoingSessions[sessionId] = ffmpeg;
       break; }
     case StreamRequestTypes.RECONFIGURE:
@@ -340,7 +340,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       if (this.ongoingSessions[sessionId]) {
         const ffmpegVideoProcess = this.ongoingSessions[sessionId];
         ffmpegVideoProcess?.stop();
-        this.log.info(`Streaming stopped for ${this.deviceData.DeviceInfo.name}`);
+        this.log.info(`Streaming stopped for ${this.deviceData.Name}`);
       }
 
       const sessionInfo = this.pendingSessions[sessionId];

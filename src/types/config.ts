@@ -2,6 +2,7 @@ import { PlatformConfig } from 'homebridge';
 import { Credentials } from './login.js';
 
 export interface DeviceConfig {
+  name?: string;
   serial: string;
   code: string;
 }

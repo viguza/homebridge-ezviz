@@ -3,6 +3,9 @@ import { ConnectionInfo, DeviceStatus, SwitchItem, P2PItem, ResourceInfo, Device
 
 export interface DeviceData {
   UUID: string;
+  Serial: string;
+  Name: string;
+  Type: string;
   Connection: ConnectionInfo;
   Status: DeviceStatus;
   Switches: SwitchItem[];

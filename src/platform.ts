@@ -72,24 +72,23 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       }
       const devices = this.extractDevicesData(devicesResponse);
       for (const device of devices) {
-        const deviceType = DeviceTypes[device.DeviceInfo.deviceCategory as keyof typeof DeviceTypes];
         const existingAccessory = this.accessories.get(device.UUID);
         if (existingAccessory) {
-          this.log.debug(`Restoring existing ${deviceType} from cache: ${existingAccessory.displayName}`);
+          this.log.debug(`Restoring existing ${device.Type} from cache: ${existingAccessory.displayName}`);
           existingAccessory.context.device = device;
-          if (deviceType === DeviceTypes.Socket) {
+          if (device.Type === DeviceTypes.Socket) {
             new SmartPlug(ezvizAPI, this, existingAccessory);
-          } else if (deviceType === DeviceTypes.IPC) {
+          } else if (device.Type === DeviceTypes.IPC) {
             new IPCamera(ezvizAPI, this, existingAccessory);
           }
         } else {
-          this.log.info(`Adding new ${deviceType}: ${device.DeviceInfo.name}`);
-          const accessory = new this.api.platformAccessory(device.DeviceInfo.name, device.UUID);
+          this.log.info(`Adding new ${device.Type}: ${device.Name}`);
+          const accessory = new this.api.platformAccessory(device.Name, device.UUID);
           accessory.context.device = device;
           this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-          if (deviceType === DeviceTypes.Socket) {
+          if (device.Type === DeviceTypes.Socket) {
             new SmartPlug(ezvizAPI, this, accessory);
-          } else if (deviceType === DeviceTypes.IPC) {
+          } else if (device.Type === DeviceTypes.IPC) {
             new IPCamera(ezvizAPI, this, accessory);
           }
         }
@@ -138,6 +137,9 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
 
       const data = {
         UUID: uuid,
+        Serial: device.deviceSerial,
+        Name: deviceConfig?.name || device.name,
+        Type: deviceType,
         Connection: devicesResponse.CONNECTION[device.deviceSerial],
         Status: devicesResponse.STATUS[device.deviceSerial],
         Switches: devicesResponse.SWITCH[device.deviceSerial],
