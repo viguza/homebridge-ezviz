@@ -8,7 +8,6 @@ This project is based on the original work by [Brandawg93](https://github.com/Br
 
 ## Warnings :warning:
 
-- This is a side project started for fun, and there is no guarantee on how far it will go or if it will be maintained. I'm a fulltime employee and dad, so my time is limited.
 - There is no official documentation for the EZVIZ API, so the endpoints used are based on other similar projects. If EZVIZ changes something, this plugin might break.
 - I only have a few devices to test, so this won't cover every single EZVIZ device.
 - Use it at your own risk.
@@ -17,7 +16,7 @@ This project is based on the original work by [Brandawg93](https://github.com/Br
 
    Install the Homebridge EZVIZ plugin using npm:
    ```sh
-   npm install -g homebridge-ezviz
+   npm install -g @viguza/homebridge-ezviz
    ```
 
 ## Configuration
@@ -26,25 +25,22 @@ To configure the plugin, you need to add the following to your Homebridge `confi
 
 ```json
 {
-  "platforms": [
+  "platform": "EZVIZ",
+  "region": 123,
+  "email": "your-email@example.com",
+  "password": "your-password",
+  "cameras": [
     {
-      "platform": "EZVIZ",
-      "region": 123,
-      "email": "your-email@example.com",
-      "password": "your-password",
-      "cameras": [
-        {
-          "serial": "camera-serial-number",
-          "username": "admin",
-          "code": "verification-code"
-        }
-      ],
-      "plugs": [
-        {
-          "serial": "plug-serial-number",
-          "code": "verification-code"
-        }
-      ]
+      "name": "Camera 1",
+      "serial": "camera-serial-number",
+      "username": "admin",
+      "code": "verification-code"
+    }
+  ],
+  "plugs": [
+    {
+      "serial": "plug-serial-number",
+      "code": "verification-code"
     }
   ]
 }
