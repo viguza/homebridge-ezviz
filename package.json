@@ -54,6 +54,7 @@
   "dependencies": {
     "axios": "^1.7.9",
     "crypto": "^1.0.1",
+    "execa": "^5.1.1",
     "ffmpeg-for-homebridge": "^2.1.7",
     "get-port": "^7.1.0",
     "homebridge-lib": "^7.1.0",
