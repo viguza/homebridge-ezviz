@@ -1,4 +1,4 @@
-import execa from 'execa';
+import { execa, ResultPromise } from 'execa';
 import { Logging, StreamRequestCallback } from 'homebridge';
 import { StreamingDelegate } from './streaming-delegate.js';
 import { Readable, Writable } from 'stream';
@@ -40,15 +40,15 @@ export async function isFfmpegInstalled(ffmpegPath: string): Promise<boolean> {
   }
 }
 
-export async function getSnapshot(url: string, customFfmpeg?: string): Promise<Buffer> {
+export async function getSnapshot(url: string, customFfmpeg?: string): Promise<string> {
   const command = ['-i', url, '-vframes', '1', '-f', 'mjpeg', '-'];
   const videoProcessor = customFfmpeg || pathToFfmpeg as unknown as string || 'ffmpeg';
-  const ff = await execa(videoProcessor, command, { env: process.env, encoding: null });
+  const ff = await execa(videoProcessor, command, { env: process.env, encoding: undefined });
   return ff.stdout;
 }
 
 export class FfmpegProcess {
-  private ff: execa.ExecaChildProcess<string> | undefined;
+  private ff: ResultPromise | undefined;
 
   constructor(
     title: string,
@@ -74,7 +74,8 @@ export class FfmpegProcess {
     try {
       this.ff = execa(videoProcessor, command, { env: process.env });
 
-      this.ff.stderr?.on('data', (data) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.ff.stderr?.on('data', (data: any) => {
         lastOutput = `${title}: ${String(data)}`;
         if (ffmpegDebugOutput) {
           log.info(lastOutput);
@@ -90,7 +91,7 @@ export class FfmpegProcess {
         }
       });
 
-      this.ff.on('exit', (code) => {
+      this.ff.on('exit', (code: number) => {
         if (code && code !== 0 && callback) {
           const lines = lastOutput.split('\n');
           let output = '';
@@ -120,9 +121,7 @@ export class FfmpegProcess {
 
   public stop(): void {
     this.ff?.stdin?.end();
-    this.ff?.kill('SIGTERM', {
-      forceKillAfterTimeout: 2000,
-    });
+    this.ff?.kill('SIGTERM');
   }
 
   public getStdin(): Writable | null | undefined {
