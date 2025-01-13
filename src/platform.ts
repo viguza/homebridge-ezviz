@@ -145,7 +145,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       const data = {
         UUID: uuid,
         Serial: device.deviceSerial,
-        Name: deviceConfig?.name || device.name,
+        Name: deviceConfig?.deviceName || device.name,
         Type: deviceType,
         Connection: devicesResponse.CONNECTION[device.deviceSerial],
         Status: devicesResponse.STATUS[device.deviceSerial],
