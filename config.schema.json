@@ -1407,11 +1407,6 @@
         "title": "Camera Setup",
         "type": "object",
         "properties": {
-          "deviceName": {
-            "title": "Device Name",
-            "type": "string",
-            "required": false
-          },
           "serial": {
             "title": "Device Serial",
             "type": "string",
@@ -1439,11 +1434,6 @@
         "title": "Plug Setup",
         "type": "object",
         "properties": {
-          "deviceName": {
-            "title": "Device Name",
-            "type": "string",
-            "required": false
-          },
           "serial": {
             "title": "Device Serial",
             "type": "string",
