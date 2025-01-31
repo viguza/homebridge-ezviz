@@ -66,6 +66,11 @@ export class EZVIZAPI {
         this.log?.error('2 Factor Authentication accounts are not supported at this time.');
         return;
       }
+
+      if (auth.meta?.code !== 200) {
+        this.log?.error('Login error code:', auth.meta?.code);
+        return;
+      }
   
       if (auth.loginSession?.sessionId) {
         const login = auth as Login;
@@ -78,6 +83,9 @@ export class EZVIZAPI {
         this.sessionId = login.loginSession.sessionId;
         this.config.credentials = credentials;
         return credentials;
+      } else {
+        this.log?.error('No sessionId found in login response');
+        return;
       }
     } catch (error) {
       this.log?.error('Unable to login', error);
