@@ -2,7 +2,7 @@
   "name": "@viguza/homebridge-ezviz",
   "displayName": "EZVIZ Homebridge Plugin",
   "type": "module",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": false,
   "description": "A short description about what your plugin does.",
   "author": "Victor Guzman",
