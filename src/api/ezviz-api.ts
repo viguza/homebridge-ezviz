@@ -13,6 +13,8 @@ import {
   EZVIZ_AUTH_ENDPOINT,
   EZVIZ_DEVICES_ENDPOINT,
   EZVIZ_SWITCH_STATUS_ENDPOINT,
+  RUSSIA_DOMAIN,
+  RUSSIA_AREA_ID,
 } from './ezviz-constants.js';
 import { sendRequest } from './ezviz-requests.js';
 
@@ -94,6 +96,10 @@ export class EZVIZAPI {
   }
 
   async getDomain(id: number): Promise<string> {
+    if (id === RUSSIA_AREA_ID) {
+      return `https://${RUSSIA_DOMAIN}`;
+    }
+
     const headers = {
       'Content-Type': 'application/x-www-form-urlencoded',
       'clientType': EZVIZ_CLIENT_TYPE,

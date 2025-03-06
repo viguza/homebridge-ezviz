@@ -5,6 +5,7 @@ import { EZVIZConfig } from '../../src/types/config';
 // import { Logging } from 'homebridge';
 import { Credentials } from '../../src/types/login';
 import { sendRequest } from '../../src/api/ezviz-requests';
+import { RUSSIA_AREA_ID, RUSSIA_DOMAIN } from '../../src/api/ezviz-constants';
 
 jest.mock('axios');
 jest.mock('../../src/api/ezviz-requests', () => ({
@@ -83,6 +84,9 @@ describe('EZVIZAPI', () => {
     test('should return credentials on success', async () => {
       const mockResponse = {
         data: {
+          meta: {
+            code: 200,
+          },
           loginSession: {
             sessionId: 'mockSessionId',
             rfSessionId: 'mockRfSessionId',
@@ -103,6 +107,11 @@ describe('EZVIZAPI', () => {
   });
 
   describe('getDomain', () => {
+    test('getDomain should return Russia domain string', async () => {
+      const domain = await ezvizApi.getDomain(RUSSIA_AREA_ID);
+      expect(domain).toBe(`https://${RUSSIA_DOMAIN}`);
+    });
+
     test('getDomain should return domain string', async () => {
       const mockResponse = { data: { domain: 'api.ezviz.com' } };
       (axios as jest.MockedFunction<typeof axios>).mockResolvedValue(mockResponse);
