@@ -6,3 +6,5 @@ export const EZVIZ_AUTH_ENDPOINT = '/v3/users/login/v5';
 export const EZVIZ_DEVICES_ENDPOINT = '/v3/userdevices/v1/resources/pagelist';
 export const EZVIZ_SWITCH_STATUS_ENDPOINT = '/api/device/switchStatus';
 export const API_ENDPOINT_REFRESH = '/v3/apigateway/login';
+export const RUSSIA_AREA_ID = 114;
+export const RUSSIA_DOMAIN = 'apiirus.ezvizru.com';
