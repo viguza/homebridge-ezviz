@@ -1,6 +1,7 @@
 export enum DeviceTypes {
   IPC = 'Camera',
   Socket = 'Plug',
+  CatEye = 'Peephole',
 }
 
 export enum SwitchTypes {

@@ -126,7 +126,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       let deviceConfig;
       if (deviceType === DeviceTypes.Socket) {
         deviceConfig = this.config.plugs?.find((plug) => plug.serial === device.deviceSerial);
-      } else if (deviceType === DeviceTypes.IPC) {
+      } else if (deviceType === DeviceTypes.IPC || deviceType === DeviceTypes.CatEye) {
         deviceConfig = this.config.cameras?.find((camera) => camera.serial === device.deviceSerial);
         if (!deviceConfig) {
           this.log.info(`Camera ${device.name} (${device.deviceSerial}) is not configured and will be skipped`);
