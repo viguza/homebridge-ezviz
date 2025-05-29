@@ -82,7 +82,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
           existingAccessory.context.device = device;
           if (device.Type === DeviceTypes.Socket) {
             new SmartPlug(ezvizAPI, this, existingAccessory);
-          } else if (device.Type === DeviceTypes.IPC) {
+          } else if (device.Type === DeviceTypes.IPC || device.Type === DeviceTypes.CatEye) {
             new IPCamera(ezvizAPI, this, existingAccessory);
           }
         } else {
@@ -92,7 +92,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
           this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
           if (device.Type === DeviceTypes.Socket) {
             new SmartPlug(ezvizAPI, this, accessory);
-          } else if (device.Type === DeviceTypes.IPC) {
+          } else if (device.Type === DeviceTypes.IPC || device.Type === DeviceTypes.CatEye) {
             new IPCamera(ezvizAPI, this, accessory);
           }
         }
