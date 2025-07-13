@@ -3,6 +3,10 @@ import { StreamingDelegate } from '../utils/streaming-delegate.js';
 import type { EZVIZPlatform } from '../platform.js';
 import { EZVIZAPI } from '../api/ezviz-api.js';
 
+/**
+ * IP Camera accessory for EZVIZ devices
+ * Handles video streaming and camera functionality
+ */
 export class IPCamera {
   private api: EZVIZAPI;
   private deviceSerial: string;
@@ -15,12 +19,16 @@ export class IPCamera {
     this.api = api;
     this.deviceSerial = accessory.context.device.DeviceInfo.deviceSerial;
 
+    // Set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'EZVIZ')
       .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.DeviceInfo.deviceSubCategory)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.deviceSerial);
     
+    // Create streaming delegate
     const streamingDelegate = new StreamingDelegate(this.platform.api.hap, accessory.context.device, this.platform.log);
+    
+    // Configure camera controller options
     const options: CameraControllerOptions = {
       cameraStreamCount: 2, // HomeKit requires at least 2 streams, but 1 is also just fine
       delegate: streamingDelegate,
@@ -57,12 +65,24 @@ export class IPCamera {
       },
     };
 
-    const cameraController = new this.platform.api.hap.CameraController(options);
-    streamingDelegate.controller = cameraController;
-  
-    accessory.configureController(streamingDelegate.controller);
+    try {
+      // Create and configure camera controller
+      const cameraController = new this.platform.api.hap.CameraController(options);
+      streamingDelegate.controller = cameraController;
+    
+      accessory.configureController(streamingDelegate.controller);
+      
+      this.platform.log.debug(`Successfully configured camera: ${accessory.context.device.Name}`);
+    } catch (error) {
+      this.platform.log.error(`Error configuring camera ${accessory.context.device.Name}:`, error);
+      throw error;
+    }
   }
 
+  /**
+   * Gets the accessory instance
+   * @returns The platform accessory
+   */
   getAccessory() {
     return this.accessory;
   }

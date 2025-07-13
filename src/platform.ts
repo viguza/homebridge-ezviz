@@ -9,6 +9,10 @@ import { DeviceTypes } from './utils/enums.js';
 import { ListDevicesResponse } from './types/devices.js';
 import { DeviceData } from './types/data.js';
 
+/**
+ * EZVIZ Platform for Homebridge
+ * Handles device discovery, authentication, and accessory management
+ */
 export class EZVIZPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
@@ -28,22 +32,42 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     this.log.debug('Finished initializing platform:', this.config.name);
   }
 
+  /**
+   * Called when Homebridge finishes launching
+   * Handles authentication and device discovery
+   */
   async didFinishLaunching(): Promise<void> {
-    const ezvizAPI = new EZVIZAPI(this.config, this.log);
-    await this.authenticate(ezvizAPI);
-    if (this.config.credentials) {
-      setInterval(async () => {
-        this.log.debug('Reauthenticating to EZVIZ API');
-        await this.authenticate(ezvizAPI);
-      }, 3600000 * 12);
-      await this.discoverDevices(ezvizAPI);
-    } else {
-      this.log.error('Could not authenticate with EZVIZ API');
+    try {
+      const ezvizAPI = new EZVIZAPI(this.config, this.log);
+      const credentials = await this.authenticate(ezvizAPI);
+      
+      if (credentials) {
+        // Set up re-authentication every 12 hours
+        setInterval(async () => {
+          this.log.debug('Reauthenticating to EZVIZ API');
+          try {
+            await this.authenticate(ezvizAPI);
+          } catch (error) {
+            this.log.error('Re-authentication failed:', error);
+          }
+        }, 3600000 * 12);
+        
+        await this.discoverDevices(ezvizAPI);
+      } else {
+        this.log.error('Could not authenticate with EZVIZ API. Please check your credentials.');
+      }
+    } catch (error) {
+      this.log.error('Error during platform initialization:', error);
     }
 
     this.log.debug('Executed didFinishLaunching callback');
   }
 
+  /**
+   * Authenticates with the EZVIZ API
+   * @param ezvizAPI - The EZVIZ API instance
+   * @returns Promise resolving to credentials or undefined if authentication fails
+   */
   async authenticate(ezvizAPI: EZVIZAPI): Promise<Credentials | undefined> {
     const region = this.config.region;
     const email = this.config.email;
@@ -54,52 +78,68 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       return;
     }
 
+    if (!region) {
+      this.log.error('You must provide your region in config.json.');
+      return;
+    }
+
     try {
       this.config.domain = await ezvizAPI.getDomain(region);
-      return await ezvizAPI.authenticate();
+      const credentials = await ezvizAPI.authenticate();
+      
+      if (credentials) {
+        this.log.info('Successfully authenticated with EZVIZ API');
+      }
+      
+      return credentials;
     } catch (error) {
-      this.log.error('Authentication failed', error);
+      this.log.error('Authentication failed:', error);
+      return;
     }
   }
 
+  /**
+   * Configures an accessory from cache
+   * @param accessory - The accessory to configure
+   */
   configureAccessory(accessory: PlatformAccessory) {
     this.log.info('Loading accessory from cache:', accessory.displayName);
     this.accessories.set(accessory.UUID, accessory);
   }
 
+  /**
+   * Discovers and manages EZVIZ devices
+   * @param ezvizAPI - The EZVIZ API instance
+   */
   async discoverDevices(ezvizAPI: EZVIZAPI) {
     try {
       const devicesResponse = await ezvizAPI.listDevices();
       if (!devicesResponse) {
-        this.log.error('No devices found');
+        this.log.error('No devices found or failed to retrieve device list');
         return;
       }
+      
       const devices = this.extractDevicesData(devicesResponse);
+      this.log.info(`Found ${devices.length} devices`);
+      
       for (const device of devices) {
         const existingAccessory = this.accessories.get(device.UUID);
         if (existingAccessory) {
           this.log.debug(`Restoring existing ${device.Type} from cache: ${existingAccessory.displayName}`);
           existingAccessory.context.device = device;
-          if (device.Type === DeviceTypes.Socket) {
-            new SmartPlug(ezvizAPI, this, existingAccessory);
-          } else if (device.Type === DeviceTypes.IPC || device.Type === DeviceTypes.CatEye) {
-            new IPCamera(ezvizAPI, this, existingAccessory);
-          }
+          this.createAccessory(ezvizAPI, existingAccessory, device.Type);
         } else {
           this.log.info(`Adding new ${device.Type}: ${device.Name}`);
           const accessory = new this.api.platformAccessory(device.Name, device.UUID);
           accessory.context.device = device;
           this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-          if (device.Type === DeviceTypes.Socket) {
-            new SmartPlug(ezvizAPI, this, accessory);
-          } else if (device.Type === DeviceTypes.IPC || device.Type === DeviceTypes.CatEye) {
-            new IPCamera(ezvizAPI, this, accessory);
-          }
+          this.createAccessory(ezvizAPI, accessory, device.Type);
         }
 
         this.discoveredCacheUUIDs.push(device.UUID);
       }
 
+      // Remove accessories that are no longer available
       for (const [uuid, accessory] of this.accessories) {
         if (!this.discoveredCacheUUIDs.includes(uuid)) {
           this.log.info('Removing existing accessory from cache:', accessory.displayName);
@@ -107,10 +147,35 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
         }
       }
     } catch (error) {
-      this.log.error('Error discovering devices', error);
+      this.log.error('Error discovering devices:', error);
     }
   }
 
+  /**
+   * Creates the appropriate accessory based on device type
+   * @param ezvizAPI - The EZVIZ API instance
+   * @param accessory - The platform accessory
+   * @param deviceType - The type of device
+   */
+  private createAccessory(ezvizAPI: EZVIZAPI, accessory: PlatformAccessory, deviceType: string) {
+    try {
+      if (deviceType === DeviceTypes.Socket) {
+        new SmartPlug(ezvizAPI, this, accessory);
+      } else if (deviceType === DeviceTypes.IPC || deviceType === DeviceTypes.CatEye) {
+        new IPCamera(ezvizAPI, this, accessory);
+      } else {
+        this.log.warn(`Unsupported device type: ${deviceType}`);
+      }
+    } catch (error) {
+      this.log.error(`Error creating accessory for ${accessory.displayName}:`, error);
+    }
+  }
+
+  /**
+   * Extracts device data from the API response
+   * @param devicesResponse - The API response containing device information
+   * @returns Array of processed device data
+   */
   extractDevicesData(devicesResponse: ListDevicesResponse): DeviceData[] {
     const devices: DeviceData[] = [];
 
@@ -159,6 +224,11 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     return devices;
   }
 
+  /**
+   * Validates camera configuration
+   * @param camera - The camera configuration to validate
+   * @returns Error message if validation fails, empty string if valid
+   */
   cameraConfigErrors(camera: CameraConfig): string {
     if (!camera.username) {
       return 'No Username';

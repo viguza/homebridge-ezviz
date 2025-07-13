@@ -18,6 +18,9 @@ import {
 } from './ezviz-constants.js';
 import { sendRequest } from './ezviz-requests.js';
 
+/**
+ * EZVIZ API client for interacting with EZVIZ services
+ */
 export class EZVIZAPI {
   private config: EZVIZConfig;
   public sessionId: string | null;
@@ -29,6 +32,11 @@ export class EZVIZAPI {
     this.log = log;
   }
 
+  /**
+   * Generates a random string of specified length
+   * @param length - The length of the string to generate
+   * @returns Random string
+   */
   randomStr(length: number): string {
     return randomBytes(length)
       .toString('base64')
@@ -37,7 +45,16 @@ export class EZVIZAPI {
       .replace(/\//g, '0');
   }
 
+  /**
+   * Authenticates with the EZVIZ API
+   * @returns Promise resolving to credentials or undefined if authentication fails
+   */
   async authenticate(): Promise<Credentials | undefined> {
+    if (!this.config.email || !this.config.password) {
+      this.log?.error('Email and password are required for authentication');
+      return;
+    }
+
     const emailHash = crypto.createHash('md5').update(this.config.email).digest('hex');
     const passHash = crypto.createHash('md5').update(this.config.password).digest('hex');
     const data = querystring.stringify({
@@ -59,6 +76,7 @@ export class EZVIZAPI {
     try {
       const response = await axios(config);
       const auth = response.data;
+      
       if (auth.retcode) {
         this.log?.error(`Login error: ${auth.retcode}`);
         return;
@@ -90,11 +108,16 @@ export class EZVIZAPI {
         return;
       }
     } catch (error) {
-      this.log?.error('Unable to login', error);
+      this.log?.error('Unable to login:', error);
       throw error;
     }
   }
 
+  /**
+   * Gets the domain URL for the specified region
+   * @param id - The region ID
+   * @returns Promise resolving to the domain URL
+   */
   async getDomain(id: number): Promise<string> {
     if (id === RUSSIA_AREA_ID) {
       return `https://${RUSSIA_DOMAIN}`;
@@ -118,16 +141,30 @@ export class EZVIZAPI {
     try {
       const response = await axios(domainReq);
       const domain = response.data as Domain;
+      
+      if (!domain.domain) {
+        throw new Error('Invalid domain response from API');
+      }
+      
       return `https://${domain.domain}`;
     } catch (error) {
-      this.log?.error('Error fetching domain', error);
+      this.log?.error('Error fetching domain:', error);
       throw error;
     }
   }
 
+  /**
+   * Lists all devices for the authenticated user
+   * @returns Promise resolving to device list or undefined if failed
+   */
   async listDevices(): Promise<ListDevicesResponse | undefined> {
     if (!this.sessionId) {
-      await this.authenticate();
+      try {
+        await this.authenticate();
+      } catch (error) {
+        this.log?.error('Failed to authenticate before listing devices:', error);
+        return;
+      }
     }
 
     try {
@@ -141,14 +178,29 @@ export class EZVIZAPI {
       const info = await sendRequest(this.config, this.config.domain, `${EZVIZ_DEVICES_ENDPOINT}?${query}`, 'GET');
       return info as ListDevicesResponse;
     } catch (error) {
-      this.log?.error('Error fetching devices', error);
+      this.log?.error('Error fetching devices:', error);
       throw error;
     }
   }
 
+  /**
+   * Sets the state of a switch/plug
+   * @param serialNumber - The device serial number
+   * @param type - The switch type
+   * @param value - The value to set (true/false)
+   */
   async setSwitchState(serialNumber: string, type: number, value: boolean): Promise<void> {
+    if (!serialNumber) {
+      throw new Error('Serial number is required');
+    }
+
     if (!this.sessionId) {
-      await this.authenticate();
+      try {
+        await this.authenticate();
+      } catch (error) {
+        this.log?.error('Failed to authenticate before setting switch state:', error);
+        throw error;
+      }
     }
 
     const config: AxiosRequestConfig = {
@@ -170,16 +222,36 @@ export class EZVIZAPI {
 
     try {
       const response = await axios(config);
+      
+      if (response.data?.retcode) {
+        throw new Error(`Switch state update failed: ${response.data.retcode}`);
+      }
+      
       return response.data;
     } catch (error) {
-      this.log?.error('Error setting switch state', error);
+      this.log?.error('Error setting switch state:', error);
       throw error;
     }
   }
 
+  /**
+   * Gets the current state of a switch/plug
+   * @param serialNumber - The device serial number
+   * @param type - The switch type
+   * @returns Promise resolving to the switch state
+   */
   async getSwitchState(serialNumber: string, type: number): Promise<boolean> {
+    if (!serialNumber) {
+      throw new Error('Serial number is required');
+    }
+
     if (!this.sessionId) {
-      await this.authenticate();
+      try {
+        await this.authenticate();
+      } catch (error) {
+        this.log?.error('Failed to authenticate before getting switch state:', error);
+        throw error;
+      }
     }
 
     const deviceList = await this.listDevices();

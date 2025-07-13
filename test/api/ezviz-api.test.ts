@@ -102,7 +102,21 @@ describe('EZVIZAPI', () => {
     test('should log error if login fails', async () => {
       (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Login failed'));
       await expect(ezvizApi.authenticate()).rejects.toThrow('Login failed');
-      expect(mockLog.error).toHaveBeenCalledWith('Unable to login', expect.any(Error));
+      expect(mockLog.error).toHaveBeenCalledWith('Unable to login:', expect.any(Error));
+    });
+
+    test('should log error and return if email is missing', async () => {
+      ezvizApi = new EZVIZAPI({ ...mockConfig, email: undefined as unknown as string } as EZVIZConfig, mockLog);
+      const credentials = await ezvizApi.authenticate();
+      expect(credentials).toBeUndefined();
+      expect(mockLog.error).toHaveBeenCalledWith('Email and password are required for authentication');
+    });
+
+    test('should log error and return if password is missing', async () => {
+      ezvizApi = new EZVIZAPI({ ...mockConfig, password: undefined as unknown as string } as EZVIZConfig, mockLog);
+      const credentials = await ezvizApi.authenticate();
+      expect(credentials).toBeUndefined();
+      expect(mockLog.error).toHaveBeenCalledWith('Email and password are required for authentication');
     });
   });
 
@@ -122,7 +136,13 @@ describe('EZVIZAPI', () => {
     test('should log error if get domain fails', async () => {
       (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Get domain failed'));
       await expect(ezvizApi.getDomain(1)).rejects.toThrow('Get domain failed');
-      expect(mockLog.error).toHaveBeenCalledWith('Error fetching domain', expect.any(Error));
+      expect(mockLog.error).toHaveBeenCalledWith('Error fetching domain:', expect.any(Error));
+    });
+
+    test('should throw error if domain response is invalid', async () => {
+      const mockResponse = { data: {} };
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce(mockResponse);
+      await expect(ezvizApi.getDomain(1)).rejects.toThrow('Invalid domain response from API');
     });
   });
 
@@ -141,7 +161,15 @@ describe('EZVIZAPI', () => {
     test('should log error if get devices fails', async () => {
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockRejectedValueOnce(new Error('Get devices failed'));
       await expect(ezvizApi.listDevices()).rejects.toThrow('Get devices failed');
-      expect(mockLog.error).toHaveBeenCalledWith('Error fetching devices', expect.any(Error));
+      expect(mockLog.error).toHaveBeenCalledWith('Error fetching devices:', expect.any(Error));
+    });
+
+    test('should log error and return if authentication fails', async () => {
+      ezvizApi = new EZVIZAPI({ ...mockConfig, credentials: undefined as unknown as Credentials } as EZVIZConfig, mockLog);
+      jest.spyOn(ezvizApi, 'authenticate').mockRejectedValueOnce(new Error('Auth failed'));
+      const result = await ezvizApi.listDevices();
+      expect(result).toBeUndefined();
+      expect(mockLog.error).toHaveBeenCalledWith('Failed to authenticate before listing devices:', expect.any(Error));
     });
   });
 
@@ -160,7 +188,23 @@ describe('EZVIZAPI', () => {
     test('should log error if set switch fails', async () => {
       (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Set switch state failed'));
       await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Set switch state failed');
-      expect(mockLog.error).toHaveBeenCalledWith('Error setting switch state', expect.any(Error));
+      expect(mockLog.error).toHaveBeenCalledWith('Error setting switch state:', expect.any(Error));
+    });
+
+    test('should throw error if serialNumber is missing', async () => {
+      await expect(ezvizApi.setSwitchState(undefined as unknown as string, 14, true)).rejects.toThrow('Serial number is required');
+    });
+
+    test('should log error and throw if authentication fails', async () => {
+      ezvizApi.sessionId = null;
+      jest.spyOn(ezvizApi, 'authenticate').mockRejectedValueOnce(new Error('Auth failed'));
+      await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Auth failed');
+      expect(mockLog.error).toHaveBeenCalledWith('Failed to authenticate before setting switch state:', expect.any(Error));
+    });
+
+    test('should throw error if switch state update fails with retcode', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { retcode: 999 } });
+      await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Switch state update failed: 999');
     });
   });
 
@@ -179,6 +223,38 @@ describe('EZVIZAPI', () => {
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValue(mockDevices);
       const state = await ezvizApi.getSwitchState('12345', 14);
       expect(state).toBe(true);
+    });
+
+    test('should throw error if serialNumber is missing', async () => {
+      await expect(ezvizApi.getSwitchState(undefined as unknown as string, 14)).rejects.toThrow('Serial number is required');
+    });
+
+    test('should log error and throw if authentication fails', async () => {
+      ezvizApi.sessionId = null;
+      jest.spyOn(ezvizApi, 'authenticate').mockRejectedValueOnce(new Error('Auth failed'));
+      await expect(ezvizApi.getSwitchState('12345', 14)).rejects.toThrow('Auth failed');
+      expect(mockLog.error).toHaveBeenCalledWith('Failed to authenticate before getting switch state:', expect.any(Error));
+    });
+
+    test('should throw error if device is not found', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ deviceInfos: [] });
+      await expect(ezvizApi.getSwitchState('notfound', 14)).rejects.toThrow('Device with serial notfound was not found');
+    });
+
+    test('should throw error if device is offline', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        deviceInfos: [{ deviceSerial: '12345', status: 0 }],
+        SWITCH: { '12345': [{ type: 14, enable: true }] },
+      });
+      await expect(ezvizApi.getSwitchState('12345', 14)).rejects.toThrow('Device with serial 12345 is offline');
+    });
+
+    test('should throw error if switch is not found', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        deviceInfos: [{ deviceSerial: '12345', status: 1 }],
+        SWITCH: { '12345': [] },
+      });
+      await expect(ezvizApi.getSwitchState('12345', 14)).rejects.toThrow('Switch for device serial 12345 was not found');
     });
   });
 });
