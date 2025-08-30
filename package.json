@@ -15,6 +15,10 @@
   "bugs": {
     "url": "https://github.com/viguza/homebridge-ezviz/issues"
   },
+  "funding": {
+    "type" : "paypal",
+    "url" : "https://paypal.me/viguza"
+  },
   "keywords": [
     "homebridge-plugin",
     "ezviz"
