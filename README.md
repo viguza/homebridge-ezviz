@@ -1,72 +1,257 @@
-[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
-
 # Homebridge EZVIZ Plugin
 
-## Introduction
+[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins) ![NPM Version](https://img.shields.io/npm/v/%40viguza%2Fhomebridge-ezviz) ![NPM Downloads](https://img.shields.io/npm/d18m/%40viguza%2Fhomebridge-ezviz) ![License](https://img.shields.io/npm/l/%40viguza%2Fhomebridge-ezviz) ![Node.js Version](https://img.shields.io/node/v/%40viguza%2Fhomebridge-ezviz)
 
-This is a Homebridge plugin for integrating EZVIZ devices into HomeKit.
+A Homebridge plugin for integrating EZVIZ devices into Apple HomeKit. This plugin provides seamless integration with your EZVIZ devices, allowing you to control them through the Home app and Siri.
 
-This project is based on the original work by [Brandawg93](https://github.com/Brandawg93/homebridge-ezviz). The idea for this project is to improve and expand upon the original plugin, especially now that it is archived.
+## Features
 
-## Warnings :warning:
+- 🏠 **HomeKit Integration**: Integration with Apple HomeKit ecosystem
+- 📹 **Camera Support**: Live streaming for EZVIZ cameras
+- 🔌 **Smart Plug Control**: Remote control of EZVIZ smart plugs
+- 🌍 **Multi-Region Support**: Support for all EZVIZ regions worldwide
+- 🔒 **Secure Authentication**: Secure login with your EZVIZ credentials
+- 🎯 **Easy Configuration**: Simple setup through Homebridge UI
+- 🔄 **Auto-Discovery**: Automatic device discovery and configuration
 
-- There is no official documentation for the EZVIZ API, so the endpoints used are based on other similar projects. If EZVIZ changes something, this plugin might break.
-- I only have a few devices to test, so this won't cover every single EZVIZ device.
-- Use it at your own risk.
+## Supported Devices
 
-## Required Device Settings
+### Cameras
+- EZVIZ IP Cameras with RTSP support
+- Indoor and outdoor security cameras
+- PTZ (Pan-Tilt-Zoom) cameras
+- Doorbell cameras
 
-Before using the plugin, you need to configure your EZVIZ devices with the following settings:
+### Smart Plugs
+- EZVIZ Smart Plugs
+- Smart switches and outlets
 
-### 1. Enable Video & Picture Encryption
-- Open the EZVIZ app
-- Go to your device settings
-- Navigate to Privacy settings
-- Enable "Video & Picture Encryption"
+## Prerequisites
 
-### 2. Enable RTSP
-RTSP (Real Time Streaming Protocol) is the protocol used by this plugin to connect to your device's livestream. You need to enable this setting for each device you want to use with the plugin.
-
-- Open the EZVIZ app
-- Go to Settings
-- Select "LAN Live View"
-- Start scanning and select your device from the list
-- Once connected, tap the settings icon in the top right corner
-- Select "Local Service settings"
-- Enable RTSP
-
-These settings are required for the plugin to access your device's livestream. Without them, you won't be able to view the camera feed in HomeKit.
+- [Homebridge](https://homebridge.io/) v1.8.0 or higher
+- Node.js v18.20.4, v20.18.0, or v22.10.0
+- EZVIZ account with registered devices
+- Network access to your EZVIZ devices
 
 ## Installation
 
-   Install the Homebridge EZVIZ plugin using npm:
-   ```sh
-   npm install -g @viguza/homebridge-ezviz
-   ```
+### Method 1: Homebridge UI (Recommended)
+1. Open Homebridge UI
+2. Go to the "Plugins" tab
+3. Search for "EZVIZ"
+4. Click "Install" on the `@viguza/homebridge-ezviz` plugin
+
+### Method 2: Command Line
+```bash
+npm install -g @viguza/homebridge-ezviz
+```
+
+## Device Setup
+
+Before using the plugin, you need to configure your EZVIZ devices:
+
+### 1. Enable Video & Picture Encryption
+1. Open the EZVIZ app
+2. Go to your device settings
+3. Navigate to Privacy settings
+4. Enable "Video & Picture Encryption"
+
+### 2. Enable RTSP (For Cameras)
+RTSP (Real Time Streaming Protocol) is required for camera live streaming:
+
+1. Open the EZVIZ app
+2. Go to Settings
+3. Select "LAN Live View"
+4. Start scanning and select your device from the list
+5. Once connected, tap the settings icon in the top right corner
+6. Select "Local Service settings"
+7. Enable RTSP
+
+> **Note**: These settings are required for the plugin to access your device's livestream. Without them, you won't be able to view the camera feed in HomeKit.
 
 ## Configuration
 
-To configure the plugin, you need to add the following to your Homebridge `config.json` file:
+### Basic Configuration
+
+Add the following to your Homebridge `config.json` file:
 
 ```json
 {
-  "platform": "EZVIZ",
-  "region": 123,
-  "email": "your-email@example.com",
-  "password": "your-password",
-  "cameras": [
+  "platforms": [
     {
-      "name": "Camera 1",
-      "serial": "camera-serial-number",
-      "username": "admin",
-      "code": "verification-code"
-    }
-  ],
-  "plugs": [
-    {
-      "serial": "plug-serial-number",
-      "code": "verification-code"
+      "platform": "EZVIZ",
+      "name": "EZVIZ",
+      "region": 314,
+      "email": "your-email@example.com",
+      "password": "your-password",
+      "cameras": [
+        {
+          "serial": "C1A1234567890",
+          "username": "admin",
+          "code": "ABCD1234"
+        }
+      ],
+      "plugs": [
+        {
+          "serial": "P1A1234567890",
+          "code": "ABCD1234"
+        }
+      ]
     }
   ]
 }
 ```
+
+### Configuration Options
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `platform` | string | Yes | Must be "EZVIZ" |
+| `name` | string | No | Platform name (default: "EZVIZ") |
+| `region` | number | Yes | Your EZVIZ region code (see region list below) |
+| `email` | string | Yes | Your EZVIZ account email |
+| `password` | string | Yes | Your EZVIZ account password |
+| `cameras` | array | No | Array of camera configurations |
+| `plugs` | array | No | Array of smart plug configurations |
+
+### Camera Configuration
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `serial` | string | Yes | Camera serial number |
+| `username` | string | Yes | Camera username (usually "admin") |
+| `code` | string | Yes | Camera verification code |
+
+### Smart Plug Configuration
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `serial` | string | Yes | Smart plug serial number |
+| `code` | string | Yes | Smart plug verification code |
+
+### Region Codes
+
+| Region | Code | Region | Code |
+|--------|------|--------|------|
+| USA | 314 | United Kingdom | 142 |
+| Canada | 312 | Germany | 112 |
+| Australia | 501 | France | 115 |
+| Japan | 227 | Italy | 141 |
+| China | 248 | Spain | 138 |
+| Hong Kong | 251 | Netherlands | 117 |
+| Singapore | 237 | Sweden | 132 |
+| India | 244 | Norway | 129 |
+
+> **Note**: For a complete list of region codes, check the plugin configuration in Homebridge UI.
+
+## Usage
+
+### In HomeKit
+1. Open the Home app on your iOS device
+2. Your EZVIZ devices will appear as accessories
+3. Tap on cameras to view live streams
+4. Use smart plugs to control connected devices
+5. Set up automations and scenes as needed
+
+### Voice Control
+- "Hey Siri, turn on the living room camera"
+- "Hey Siri, turn off the bedroom plug"
+- "Hey Siri, show me the front door camera"
+
+## Troubleshooting
+
+### Common Issues
+
+#### Camera Not Showing Video
+- Ensure RTSP is enabled on your camera
+- Check that Video & Picture Encryption is enabled
+- Verify camera credentials are correct
+- Check network connectivity
+
+#### Smart Plug Not Responding
+- Verify the verification code is correct
+- Check that the plug is online in the EZVIZ app
+- Ensure the plug is connected to your network
+
+#### Authentication Errors
+- Double-check your email and password
+- Verify your region code is correct
+- Try logging into the EZVIZ app to confirm credentials
+
+### Debug Mode
+
+Enable debug mode for detailed logging:
+
+1. Open Homebridge UI
+2. Go to the plugin settings
+3. Enable "Debug" mode
+4. Check the logs for detailed information
+
+### Getting Help
+
+1. Check the [Issues](https://github.com/viguza/homebridge-ezviz/issues) page
+2. Search for existing solutions
+3. Create a new issue with:
+   - Device information
+   - Configuration (without credentials)
+   - Error logs
+   - Steps to reproduce
+
+## Development
+
+### Building from Source
+
+```bash
+git clone https://github.com/viguza/homebridge-ezviz.git
+cd homebridge-ezviz
+npm install
+npm run build
+```
+
+### Running Tests
+
+```bash
+npm test
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and updates.
+
+## Disclaimer
+
+⚠️ **Important Warnings**:
+
+- There is no official documentation for the EZVIZ API, so the endpoints used are based on other similar projects. If EZVIZ changes something, this plugin might break.
+- This plugin is tested with a limited number of devices. It may not cover every single EZVIZ device.
+- Use this plugin at your own risk.
+- This plugin is not officially affiliated with EZVIZ.
+
+## Credits
+
+This project is based on the original work by [Brandawg93](https://github.com/Brandawg93/homebridge-ezviz). The idea for this project is to improve and expand upon the original plugin, especially now that it is archived.
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+If you find this plugin helpful, please consider:
+
+- ⭐ Starring the repository
+- 🐛 Reporting bugs and issues
+- 💡 Suggesting new features
+- 💰 [Supporting the project](https://paypal.me/viguza)
+
+---
+
+**Made with ❤️ for the Homebridge community**
