@@ -16,8 +16,8 @@
     "url": "https://github.com/viguza/homebridge-ezviz/issues"
   },
   "funding": {
-    "type": "paypal",
-    "url": "https://paypal.me/viguza"
+    "type": "github",
+    "url": "https://github.com/sponsors/viguza"
   },
   "keywords": [
     "homebridge-plugin",
