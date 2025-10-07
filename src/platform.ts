@@ -219,7 +219,24 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       } as DeviceData;
 
       devices.push(data);
-    };
+
+      if (device.deviceSubCategory === 'H9c') {
+        // Dual camera
+        data.UUID = this.api.hap.uuid.generate(device.deviceSerial + '_1');
+        data.DeviceInfo.channelNumber = 201;
+        const data2 = {
+          ...data,
+          UUID: this.api.hap.uuid.generate(device.deviceSerial + '_2'),
+          Name: device.name + ' (Secondary)',
+          DeviceInfo: {
+            ...data.DeviceInfo,
+            channelNumber: 101,
+          },
+        } as DeviceData;
+
+        devices.push(data2);
+      }
+    }
 
     return devices;
   }
