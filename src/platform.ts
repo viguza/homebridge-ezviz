@@ -222,7 +222,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
 
       if (device.deviceSubCategory === 'H9c') {
         // Dual camera
-        data.UUID = this.api.hap.uuid.generate(device.deviceSerial + '_2');
+        data.UUID = this.api.hap.uuid.generate(device.deviceSerial + '_1');
         data.DeviceInfo.channelNumber = 201;
         const data2 = {
           ...data,
