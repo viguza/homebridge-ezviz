@@ -131,18 +131,11 @@ Add the following to your Homebridge `config.json` file:
 
 ### Region Codes
 
-| Region | Code | Region | Code |
-|--------|------|--------|------|
-| USA | 314 | United Kingdom | 142 |
-| Canada | 312 | Germany | 112 |
-| Australia | 501 | France | 115 |
-| Japan | 227 | Italy | 141 |
-| China | 248 | Spain | 138 |
-| Hong Kong | 251 | Netherlands | 117 |
-| Singapore | 237 | Sweden | 132 |
-| India | 244 | Norway | 129 |
+The EZVIZ API uses numeric region codes (also called `areaId`) to determine which regional API endpoint to use.
 
-> **Note**: For a complete list of region codes, check the plugin configuration in Homebridge UI.
+For a complete list of all supported region codes, see [config.schema.json](config.schema.json) in the plugin repository. The schema includes all available regions and their corresponding codes.
+
+> **Note**: You can also check the plugin configuration in Homebridge UI, which will show the available region codes.
 
 ## Usage
 
@@ -196,6 +189,19 @@ Enable debug mode for detailed logging:
    - Configuration (without credentials)
    - Error logs
    - Steps to reproduce
+
+## API Documentation
+
+For developers who want to understand or work with the EZVIZ API directly, we provide detailed API documentation using curl commands that can be easily imported into Postman or similar tools.
+
+📖 **[View API Documentation](EZVIZ_API.md)**
+
+The documentation includes:
+- Step-by-step authentication process
+- How to retrieve device information
+- Regional API domains and endpoints
+- Common error codes and troubleshooting
+- Complete curl examples
 
 ## Development
 
