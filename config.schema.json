@@ -1431,6 +1431,12 @@
               "description": "The verification code is usually located on the side of the camera.",
               "type": "string",
               "required": true
+            },
+            "dualCamera": {
+              "title": "Dual Camera",
+              "description": "Enable this if your device has multiple physical cameras (e.g., H9c dual camera). This will create separate accessories for each camera lens.",
+              "type": "boolean",
+              "default": false
             }
           }
         }
