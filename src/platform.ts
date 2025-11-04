@@ -204,21 +204,56 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
         }
       }
 
-      const data = {
-        UUID: uuid,
-        Serial: device.deviceSerial,
-        Name: device.name,
-        Type: deviceType,
-        Connection: devicesResponse.CONNECTION[device.deviceSerial],
-        Status: devicesResponse.STATUS[device.deviceSerial],
-        Switches: devicesResponse.SWITCH[device.deviceSerial],
-        P2P: devicesResponse.P2P[device.deviceSerial],
-        ResourceInfo: devicesResponse.resourceInfos.find((resource) => resource.deviceSerial === device.deviceSerial),
-        DeviceInfo: device,
-        HBConfig: deviceConfig,
-      } as DeviceData;
+      // Check if this is a dual camera
+      const isDualCamera = deviceType === DeviceTypes.IPC && (deviceConfig as CameraConfig).dualCamera;
 
-      devices.push(data);
+      if (isDualCamera) {
+        // Create two separate camera accessories for dual camera devices
+        const cameraChannels = [
+          { suffix: '1', channelNumber: 101 },
+          { suffix: '2', channelNumber: 201 },
+        ];
+
+        for (const { suffix, channelNumber } of cameraChannels) {
+          const deviceSerial = `${device.deviceSerial}_${suffix}`;
+          const deviceUuid = this.api.hap.uuid.generate(deviceSerial);
+          const deviceName = `${device.name} - Camera ${suffix}`;
+          const deviceData = { ...device };
+          deviceData.channelNumber = channelNumber;
+
+          const data = {
+            UUID: deviceUuid,
+            Serial: deviceSerial,
+            Name: deviceName,
+            Type: deviceType,
+            Connection: devicesResponse.CONNECTION[device.deviceSerial],
+            Status: devicesResponse.STATUS[device.deviceSerial],
+            Switches: devicesResponse.SWITCH[device.deviceSerial],
+            P2P: devicesResponse.P2P[device.deviceSerial],
+            ResourceInfo: devicesResponse.resourceInfos.find((resource) => resource.deviceSerial === device.deviceSerial),
+            DeviceInfo: deviceData,
+            HBConfig: deviceConfig,
+          } as DeviceData;
+
+          devices.push(data);
+        }
+      } else {
+        const data = {
+          UUID: uuid,
+          Serial: device.deviceSerial,
+          Name: device.name,
+          Type: deviceType,
+          Connection: devicesResponse.CONNECTION[device.deviceSerial],
+          Status: devicesResponse.STATUS[device.deviceSerial],
+          Switches: devicesResponse.SWITCH[device.deviceSerial],
+          P2P: devicesResponse.P2P[device.deviceSerial],
+          ResourceInfo: devicesResponse.resourceInfos.find((resource) => resource.deviceSerial === device.deviceSerial),
+          DeviceInfo: device,
+          HBConfig: deviceConfig,
+        } as DeviceData;
+
+        devices.push(data);
+      }
     };
 
     return devices;
