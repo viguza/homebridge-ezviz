@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.3.0] - 2025-11-03
+
+### Added
+- Added config option for dual cameras (#13)
+
 ## [1.2.12] - 2025-09-02
 
 ### Fixed
@@ -112,7 +117,8 @@ This project is based on the original work by [Brandawg93](https://github.com/Br
 
 ### Version History Notes
 
-- **v1.2.12**: Latest stable release with live streaming fixes
+- **v1.3.0**: Added config option for dual cameras
+- **v1.2.12**: Live streaming fixes
 - **v1.2.11**: Added funding support and documentation improvements
 - **v1.2.10**: Major rewrite with TypeScript and enhanced features
 - **v1.2.9 and earlier**: Legacy versions with incremental improvements
