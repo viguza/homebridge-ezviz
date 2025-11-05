@@ -1,6 +1,7 @@
 import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, Service } from 'homebridge';
 import { SmartPlug } from './accessories/smart-plug.js';
 import { IPCamera } from './accessories/ip-camera.js';
+import { AlarmModeSwitch } from './accessories/alarm-mode-switch.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { EZVIZAPI } from './api/ezviz-api.js';
 import { EZVIZConfig, CameraConfig } from './types/config.js';
@@ -138,6 +139,22 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
 
         this.discoveredCacheUUIDs.push(device.UUID);
       }
+
+      // Create a single alarm mode switch accessory
+      const alarmUuid = this.api.hap.uuid.generate('EZVIZ-AlarmMode');
+      const existingAlarmAccessory = this.accessories.get(alarmUuid);
+
+      if (existingAlarmAccessory) {
+        this.log.debug('Restoring existing alarm mode switch from cache');
+        new AlarmModeSwitch(ezvizAPI, this, existingAlarmAccessory);
+      } else {
+        this.log.info('Adding new alarm mode switch');
+        const alarmAccessory = new this.api.platformAccessory('Alarm Mode', alarmUuid);
+        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [alarmAccessory]);
+        new AlarmModeSwitch(ezvizAPI, this, alarmAccessory);
+      }
+
+      this.discoveredCacheUUIDs.push(alarmUuid);
 
       // Remove accessories that are no longer available
       for (const [uuid, accessory] of this.accessories) {
