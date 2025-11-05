@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.5.0] - 2025-11-04
+
+### Added
+- Alarm Mode Switch: Added HomeKit switch accessory to control EZVIZ defence/alarm modes (#11)
+  - Switch ON = AWAY_MODE (fully armed)
+  - Switch OFF = HOME_MODE (disarmed)
+  - Switch state automatically reflects current defence mode status
+  - Supports control via Apple Shortcuts, Siri, and Home app
+  - Added API methods for getting and setting defence mode
+
 ## [1.3.0] - 2025-11-03
 
 ### Added
