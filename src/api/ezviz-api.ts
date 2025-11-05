@@ -13,9 +13,13 @@ import {
   EZVIZ_AUTH_ENDPOINT,
   EZVIZ_DEVICES_ENDPOINT,
   EZVIZ_SWITCH_STATUS_ENDPOINT,
+  EZVIZ_DEFENCE_MODE_ENDPOINT,
+  EZVIZ_DEFENCE_MODE_GET_ENDPOINT,
   RUSSIA_DOMAIN,
   RUSSIA_AREA_ID,
+  DEFAULT_GROUP_ID,
 } from './ezviz-constants.js';
+import { DefenceMode } from '../utils/enums.js';
 import { sendRequest } from './ezviz-requests.js';
 
 /**
@@ -170,7 +174,7 @@ export class EZVIZAPI {
     try {
       const query = querystring.stringify({
         filter: 'CONNECTION,SWITCH,STATUS,NODISTURB,P2P,FEATURE,DETECTOR',
-        groupId: -1,
+        groupId: DEFAULT_GROUP_ID,
         limit: 30,
         offset: 0,
       });
@@ -282,5 +286,121 @@ export class EZVIZAPI {
     }
 
     return deviceSwitch?.enable;
+  }
+
+  /**
+   * Sets the defence mode (alarm mode) for a group
+   * @param groupId - The group ID (default: 1)
+   * @param mode - The defence mode (DefenceMode enum value)
+   * @returns Promise resolving when defence mode is set
+   */
+  async setDefenceMode(groupId: number = DEFAULT_GROUP_ID, mode: DefenceMode): Promise<void> {
+    if (!Object.values(DefenceMode).includes(mode)) {
+      throw new Error(`Invalid defence mode. Must be one of: ${Object.values(DefenceMode).join(', ')}`);
+    }
+
+    if (!this.sessionId) {
+      try {
+        await this.authenticate();
+      } catch (error) {
+        this.log?.error('Failed to authenticate before setting defence mode:', error);
+        throw error;
+      }
+    }
+
+    const query = querystring.stringify({
+      groupId: groupId,
+      mode: mode,
+    });
+
+    const config: AxiosRequestConfig = {
+      method: 'post',
+      url: `${this.config.domain}${EZVIZ_DEFENCE_MODE_ENDPOINT}?${query}`,
+      headers: {
+        'sessionid': this.sessionId,
+        'clienttype': EZVIZ_CLIENT_TYPE,
+        'user-agent': EZVIZ_USER_AGENT,
+      },
+    };
+
+    try {
+      const response = await axios(config);
+
+      if (response.data?.retcode && response.data.retcode !== '200') {
+        throw new Error(`Defence mode update failed: ${response.data.retcode}`);
+      }
+
+      if (response.data?.meta?.code && response.data.meta.code !== 200) {
+        throw new Error(`Defence mode update failed: ${response.data.meta.code} - ${response.data.meta.message}`);
+      }
+
+      return response.data;
+    } catch (error) {
+      this.log?.error('Error setting defence mode:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Gets the current defence mode (alarm mode) for a group
+   * @param groupId - The group ID (default: 1)
+   * @returns Promise resolving to the current defence mode (DefenceMode enum value)
+   */
+  async getDefenceMode(groupId: number = DEFAULT_GROUP_ID): Promise<DefenceMode> {
+    if (!this.sessionId) {
+      try {
+        await this.authenticate();
+      } catch (error) {
+        this.log?.error('Failed to authenticate before getting defence mode:', error);
+        throw error;
+      }
+    }
+
+    const query = querystring.stringify({
+      groupId: groupId,
+    });
+
+    const config: AxiosRequestConfig = {
+      method: 'get',
+      url: `${this.config.domain}${EZVIZ_DEFENCE_MODE_GET_ENDPOINT}?${query}`,
+      headers: {
+        'sessionid': this.sessionId,
+        'clienttype': EZVIZ_CLIENT_TYPE,
+        'user-agent': EZVIZ_USER_AGENT,
+      },
+    };
+
+    try {
+      const response = await axios(config);
+
+      if (response.data?.retcode && response.data.retcode !== '200') {
+        throw new Error(`Failed to get defence mode: ${response.data.retcode}`);
+      }
+
+      if (response.data?.meta?.code && response.data.meta.code !== 200) {
+        throw new Error(`Failed to get defence mode: ${response.data.meta.code} - ${response.data.meta.message}`);
+      }
+
+      // Extract the mode from the response
+      // The response structure may vary, but typically it's in response.data.mode or response.data.defenceMode
+      const mode = response.data?.mode || response.data?.defenceMode || response.data?.data?.mode;
+
+      if (mode === undefined || mode === null) {
+        this.log?.debug('No mode found in response, defaulting to UNSET_MODE');
+        return DefenceMode.UNSET_MODE;
+      }
+
+      const modeValue = typeof mode === 'string' ? parseInt(mode, 10) : mode;
+
+      if (!Object.values(DefenceMode).includes(modeValue as DefenceMode)) {
+        this.log?.debug(`Unknown defence mode value: ${modeValue}, defaulting to UNSET_MODE`);
+        return DefenceMode.UNSET_MODE;
+      }
+
+      return modeValue as DefenceMode;
+    } catch (error) {
+      this.log?.error('Error getting defence mode:', error);
+      throw error;
+    }
   }
 }

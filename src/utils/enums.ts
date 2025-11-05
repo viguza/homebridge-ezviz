@@ -9,3 +9,10 @@ export enum SwitchTypes {
   Sleep = 21,
   Audio = 22,
 }
+
+export enum DefenceMode {
+  UNSET_MODE = 0,
+  HOME_MODE = 1,
+  AWAY_MODE = 2,
+  SLEEP_MODE = 3,
+}
