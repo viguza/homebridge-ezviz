@@ -1,8 +1,17 @@
 export enum DeviceTypes {
   IPC = 'Camera',
+  BatteryCamera = 'Battery Camera',
+  BDoorBell = 'Doorbell',
   Socket = 'Plug',
   CatEye = 'Peephole',
 }
+
+export const CAMERA_DEVICE_TYPES = new Set([
+  DeviceTypes.IPC,
+  DeviceTypes.BatteryCamera,
+  DeviceTypes.BDoorBell,
+  DeviceTypes.CatEye,
+]);
 
 export enum SwitchTypes {
   On = 14,
