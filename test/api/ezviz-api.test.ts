@@ -241,10 +241,6 @@ describe('EZVIZAPI', () => {
   });
 
   describe('getLastAlarmTime', () => {
-    beforeEach(() => {
-      ezvizApi.sessionId = 'mockSessionId';
-    });
-
     test('returns ms timestamp when API returns ms epoch', async () => {
       const nowMs = Date.now();
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
@@ -292,6 +288,63 @@ describe('EZVIZAPI', () => {
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockRejectedValueOnce(new Error('Network error'));
       await expect(ezvizApi.getLastAlarmTime('12345')).rejects.toThrow('Network error');
       expect(mockLog.error).toHaveBeenCalledWith('Error fetching last alarm time:', expect.any(Error));
+    });
+  });
+
+  describe('soundAlarm', () => {
+    beforeEach(() => {
+      ezvizApi.sessionId = 'mockSessionId';
+    });
+    
+    test('calls PUT /v3/devices/{serial}/0/sendAlarm with enable=1', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { meta: { code: 200 } } });
+      await ezvizApi.soundAlarm('12345');
+      expect(axios).toHaveBeenCalledWith(expect.objectContaining({
+        method: 'put',
+        url: expect.stringContaining('/v3/devices/12345/0/sendAlarm'),
+        data: expect.stringContaining('enable=1'),
+      }));
+    });
+
+    test('throws on non-200 meta code', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { meta: { code: 403, message: 'Forbidden' } } });
+      await expect(ezvizApi.soundAlarm('12345')).rejects.toThrow('Sound alarm failed: 403');
+    });
+
+    test('throws and logs on network error', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Network error'));
+      await expect(ezvizApi.soundAlarm('12345')).rejects.toThrow('Network error');
+      expect(mockLog.error).toHaveBeenCalledWith('Error triggering alarm siren:', expect.any(Error));
+    });
+
+    test('throws if serial is missing', async () => {
+      await expect(ezvizApi.soundAlarm('')).rejects.toThrow('Serial number is required');
+    });
+  });
+
+  describe('cancelAlarm', () => {
+    beforeEach(() => {
+      ezvizApi.sessionId = 'mockSessionId';
+    });
+
+    test('calls POST /api/device/cancelAlarm with subSerial', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { meta: { code: 200 } } });
+      await ezvizApi.cancelAlarm('12345');
+      expect(axios).toHaveBeenCalledWith(expect.objectContaining({
+        method: 'post',
+        url: expect.stringContaining('/api/device/cancelAlarm'),
+        data: expect.stringContaining('subSerial=12345'),
+      }));
+    });
+
+    test('throws and logs on network error', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Network error'));
+      await expect(ezvizApi.cancelAlarm('12345')).rejects.toThrow('Network error');
+      expect(mockLog.error).toHaveBeenCalledWith('Error cancelling alarm siren:', expect.any(Error));
+    });
+
+    test('throws if serial is missing', async () => {
+      await expect(ezvizApi.cancelAlarm('')).rejects.toThrow('Serial number is required');
     });
   });
 

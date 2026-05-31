@@ -5,6 +5,7 @@ export const EZVIZ_DOMAINS_ENDPOINT = '/api/area/domain';
 export const EZVIZ_AUTH_ENDPOINT = '/v3/users/login/v5';
 export const EZVIZ_DEVICES_ENDPOINT = '/v3/userdevices/v1/resources/pagelist';
 export const EZVIZ_SWITCH_STATUS_ENDPOINT = '/api/device/switchStatus';
+export const EZVIZ_CANCEL_ALARM_ENDPOINT = '/api/device/cancelAlarm';
 export const EZVIZ_DEFENCE_MODE_ENDPOINT = '/v3/userdevices/v1/group/switchDefenceMode';
 export const EZVIZ_DEFENCE_MODE_GET_ENDPOINT = '/v3/userdevices/v1/group/defenceMode';
 export const API_ENDPOINT_REFRESH = '/v3/apigateway/login';

@@ -13,6 +13,7 @@ export interface CameraConfig extends DeviceConfig {
   username: string;
   dualCamera?: boolean;
   motionSensor?: boolean;
+  sirenSwitch?: boolean;
 }
 
 export interface EZVIZConfig extends PlatformConfig {

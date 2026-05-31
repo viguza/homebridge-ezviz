@@ -1443,6 +1443,12 @@
               "description": "Creates a motion sensor accessory that polls the EZVIZ alarm history every 30 seconds. Motion stays active for 60 seconds after the last alarm.",
               "type": "boolean",
               "default": false
+            },
+            "sirenSwitch": {
+              "title": "Siren Switch",
+              "description": "Creates a switch accessory that triggers the camera's audible siren. The siren runs for ~30 seconds then auto-stops.",
+              "type": "boolean",
+              "default": false
             }
           }
         }

@@ -14,6 +14,7 @@ import {
   EZVIZ_DEVICES_ENDPOINT,
   EZVIZ_SWITCH_STATUS_ENDPOINT,
   EZVIZ_UNIFIEDMSG_ENDPOINT,
+  EZVIZ_CANCEL_ALARM_ENDPOINT,
   EZVIZ_DEFENCE_MODE_ENDPOINT,
   EZVIZ_DEFENCE_MODE_GET_ENDPOINT,
   API_ENDPOINT_REFRESH,
@@ -391,6 +392,78 @@ export class EZVIZAPI {
     }
 
     return deviceSwitch?.enable;
+  }
+
+  /**
+   * Triggers the audible siren on a camera.
+   * The siren runs for ~30 seconds on the device and then stops automatically.
+   */
+  async soundAlarm(serialNumber: string): Promise<void> {
+    if (!serialNumber) {
+      throw new Error('Serial number is required');
+    }
+    if (!this.sessionId) {
+      await this.authenticate();
+    }
+
+    const config: AxiosRequestConfig = {
+      method: 'put',
+      url: `${this.config.domain}/v3/devices/${serialNumber}/0/sendAlarm`,
+      headers: {
+        'sessionId': this.sessionId,
+        'clientType': '3',
+        'featureCode': this.config.credentials?.featureCode ?? '',
+        'User-Agent': 'okhttp/3.12.1',
+        'appId': 'ys7',
+        'clientNo': 'web_site',
+        'lang': 'en',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      data: querystring.stringify({ enable: 1 }),
+    };
+
+    try {
+      const response = await axios(config);
+      if (response.data?.meta?.code && response.data.meta.code !== 200) {
+        throw new Error(`Sound alarm failed: ${response.data.meta.code} - ${response.data.meta.message}`);
+      }
+    } catch (error) {
+      this.log?.error('Error triggering alarm siren:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancels the audible siren on a camera.
+   */
+  async cancelAlarm(serialNumber: string): Promise<void> {
+    if (!serialNumber) {
+      throw new Error('Serial number is required');
+    }
+    if (!this.sessionId) {
+      await this.authenticate();
+    }
+
+    const config: AxiosRequestConfig = {
+      method: 'post',
+      url: `${this.config.domain}${EZVIZ_CANCEL_ALARM_ENDPOINT}`,
+      headers: {
+        'sessionid': this.sessionId,
+        'clienttype': EZVIZ_CLIENT_TYPE,
+        'user-agent': EZVIZ_USER_AGENT,
+      },
+      data: querystring.stringify({ subSerial: serialNumber }),
+    };
+
+    try {
+      const response = await axios(config);
+      if (response.data?.meta?.code && response.data.meta.code !== 200) {
+        throw new Error(`Cancel alarm failed: ${response.data.meta.code} - ${response.data.meta.message}`);
+      }
+    } catch (error) {
+      this.log?.error('Error cancelling alarm siren:', error);
+      throw error;
+    }
   }
 
   /**
