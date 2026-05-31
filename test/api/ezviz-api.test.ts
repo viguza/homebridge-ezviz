@@ -240,6 +240,61 @@ describe('EZVIZAPI', () => {
     });
   });
 
+  describe('getLastAlarmTime', () => {
+    beforeEach(() => {
+      ezvizApi.sessionId = 'mockSessionId';
+    });
+
+    test('returns ms timestamp when API returns ms epoch', async () => {
+      const nowMs = Date.now();
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        message: [{ deviceSerial: '12345', time: nowMs }],
+      });
+      const result = await ezvizApi.getLastAlarmTime('12345');
+      expect(result).toBe(nowMs);
+    });
+
+    test('converts seconds epoch to ms', async () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        message: [{ deviceSerial: '12345', time: nowSec }],
+      });
+      const result = await ezvizApi.getLastAlarmTime('12345');
+      expect(result).toBe(nowSec * 1000);
+    });
+
+    test('parses string timestamps', async () => {
+      const nowMs = Date.now();
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        message: [{ deviceSerial: '12345', time: String(nowMs) }],
+      });
+      const result = await ezvizApi.getLastAlarmTime('12345');
+      expect(result).toBe(nowMs);
+    });
+
+    test('returns null when message list is empty', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        message: [],
+      });
+      const result = await ezvizApi.getLastAlarmTime('12345');
+      expect(result).toBeNull();
+    });
+
+    test('returns null when time field is missing', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        message: [{ deviceSerial: '12345' }],
+      });
+      const result = await ezvizApi.getLastAlarmTime('12345');
+      expect(result).toBeNull();
+    });
+
+    test('throws and logs on API error', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockRejectedValueOnce(new Error('Network error'));
+      await expect(ezvizApi.getLastAlarmTime('12345')).rejects.toThrow('Network error');
+      expect(mockLog.error).toHaveBeenCalledWith('Error fetching last alarm time:', expect.any(Error));
+    });
+  });
+
   describe('getDeviceList', () => {
     beforeEach(() => {
       ezvizApi.sessionId = 'mockSessionId';

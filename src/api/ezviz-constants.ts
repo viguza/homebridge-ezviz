@@ -8,6 +8,7 @@ export const EZVIZ_SWITCH_STATUS_ENDPOINT = '/api/device/switchStatus';
 export const EZVIZ_DEFENCE_MODE_ENDPOINT = '/v3/userdevices/v1/group/switchDefenceMode';
 export const EZVIZ_DEFENCE_MODE_GET_ENDPOINT = '/v3/userdevices/v1/group/defenceMode';
 export const API_ENDPOINT_REFRESH = '/v3/apigateway/login';
+export const EZVIZ_UNIFIEDMSG_ENDPOINT = '/v3/unifiedmsg/list';
 export const RUSSIA_AREA_ID = 114;
 export const RUSSIA_DOMAIN = 'apiirus.ezvizru.com';
 export const DEFAULT_GROUP_ID = -1;
