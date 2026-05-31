@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.7.0] - 2026-05-31
+
+### Added
+- Motion sensor accessory per camera (opt-in via `motionSensor: true` in camera config) — polls the EZVIZ alarm history every 30 seconds and triggers a HomeKit motion event when a new alarm is detected; motion stays active for 90 seconds (#23)
+- Node.js 24 added to supported engines (#28)
+
 ## [1.6.0] - 2026-05-31
 
 ### Added

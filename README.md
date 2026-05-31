@@ -7,7 +7,8 @@ A Homebridge plugin for integrating EZVIZ devices into Apple HomeKit. This plugi
 ## Features
 
 - 🏠 **HomeKit Integration**: Integration with Apple HomeKit ecosystem
-- 📹 **Camera Support**: Live streaming for EZVIZ cameras
+- 📹 **Camera Support**: Live streaming for EZVIZ cameras (WiFi and wired)
+- 🚨 **Motion Sensor**: Optional per-camera motion sensor accessory for HomeKit automations
 - 🔌 **Smart Plug Control**: Remote control of EZVIZ smart plugs
 - 🌍 **Multi-Region Support**: Support for all EZVIZ regions worldwide
 - 🔒 **Secure Authentication**: Secure login with your EZVIZ credentials
@@ -29,7 +30,7 @@ A Homebridge plugin for integrating EZVIZ devices into Apple HomeKit. This plugi
 ## Prerequisites
 
 - [Homebridge](https://homebridge.io/) v1.8.0 or higher
-- Node.js v18.20.4, v20.18.0, or v22.10.0
+- Node.js v18, v20, v22, or v24
 - EZVIZ account with registered devices
 - Network access to your EZVIZ devices
 
@@ -121,6 +122,8 @@ Add the following to your Homebridge `config.json` file:
 | `serial` | string | Yes | Camera serial number |
 | `username` | string | Yes | Camera username (usually "admin") |
 | `code` | string | Yes | Camera verification code |
+| `motionSensor` | boolean | No | Creates a motion sensor accessory (polls alarm history every 30 s) |
+| `dualCamera` | boolean | No | Enable for devices with two physical lenses (e.g. H9c) |
 
 ### Smart Plug Configuration
 
