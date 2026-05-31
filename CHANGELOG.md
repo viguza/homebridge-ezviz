@@ -19,6 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.6.0] - 2026-05-31
+
+### Added
+- Session refresh using refresh token — scheduled re-authentication now uses `PUT /v3/apigateway/login` with the existing refresh token instead of a full re-login, falling back to full re-authentication if the token is rejected (#21)
+- Support for BatteryCamera and BDoorBell device categories — these devices are no longer silently skipped during discovery and are exposed as cameras in HomeKit (#24)
+
+### Fixed
+- WiFi cameras failing to stream or take snapshots (#26)
+  - Plugin now requests WIFI IP data from the pagelist API and prefers `WIFI.address` over `CONNECTION.localIp`, which returns `0.0.0.0` for many WiFi cameras
+  - Switched RTSP transport from UDP to TCP (`-rtsp_transport tcp`) for reliable WiFi streaming
+  - RTSP URL now includes the correct port from `CONNECTION.localRtspPort`
+  - Added `-use_wallclock_as_timestamps 1` to fix non-monotonic timestamp warnings from cameras
+  - Added `-af aresample=async=1` to fix audio distortion caused by backward audio timestamps
+
 ## [1.5.0] - 2025-11-04
 
 ### Added
