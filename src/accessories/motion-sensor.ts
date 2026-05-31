@@ -4,15 +4,15 @@ import type { EZVIZPlatform } from '../platform.js';
 import { EZVIZAPI } from '../api/ezviz-api.js';
 
 const POLL_INTERVAL_MS = 30_000;
-// How long motion stays active after a new alarm is detected
 const MOTION_WINDOW_MS = 90_000;
 
 export class MotionSensor {
   private readonly service: Service;
   private motionDetected = false;
-  // undefined = first poll not yet done (don't trigger on startup)
   private lastSeenAlarmTime: number | null | undefined = undefined;
   private clearTimer: ReturnType<typeof setTimeout> | null = null;
+  private usingMqtt = false;
+  private pollInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly api: EZVIZAPI,
@@ -33,18 +33,63 @@ export class MotionSensor {
       .onGet(() => this.motionDetected);
 
     this.poll();
-    setInterval(() => this.poll(), POLL_INTERVAL_MS);
+    this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS);
+  }
+
+  /**
+   * Called by the MQTT client when a push event arrives for this camera.
+   * Switches the sensor to MQTT mode — polling continues as a fallback
+   * but won't trigger motion once MQTT is active.
+   */
+  onMqttAlarm(alarmTime: number): void {
+    if (!this.usingMqtt) {
+      this.usingMqtt = true;
+      // MQTT confirmed working — stop the polling interval
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+        this.platform.log.debug(`${this.accessory.displayName}: polling stopped, using MQTT`);
+      }
+    }
+    if (alarmTime !== this.lastSeenAlarmTime) {
+      this.lastSeenAlarmTime = alarmTime;
+      this.triggerMotion();
+    }
+  }
+
+  stopPolling(): void {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+      this.usingMqtt = true;
+      this.platform.log.debug(`${this.accessory.displayName}: polling stopped, using MQTT`);
+    }
   }
 
   private get serial(): string {
     return this.accessory.context.serial;
   }
 
+  private triggerMotion(): void {
+    if (this.clearTimer) {
+      clearTimeout(this.clearTimer);
+    }
+    this.motionDetected = true;
+    this.service.updateCharacteristic(this.platform.Characteristic.MotionDetected, true);
+    this.platform.log.info(`${this.accessory.displayName}: motion detected${this.usingMqtt ? ' (MQTT)' : ''}`);
+
+    this.clearTimer = setTimeout(() => {
+      this.motionDetected = false;
+      this.service.updateCharacteristic(this.platform.Characteristic.MotionDetected, false);
+      this.platform.log.debug(`${this.accessory.displayName}: motion cleared`);
+    }, MOTION_WINDOW_MS);
+  }
+
   private async poll(): Promise<void> {
+    // When MQTT is active, polling still runs but only initialises state — no triggering
     try {
       const alarmTime = await this.api.getLastAlarmTime(this.serial);
 
-      // First poll: initialise without triggering (avoids false motion on startup)
       if (this.lastSeenAlarmTime === undefined) {
         this.lastSeenAlarmTime = alarmTime;
         this.platform.log.debug(`${this.accessory.displayName}: initialised alarmTime=${alarmTime}`);
@@ -61,18 +106,7 @@ export class MotionSensor {
       }
 
       if (isNew) {
-        if (this.clearTimer) {
-          clearTimeout(this.clearTimer);
-        }
-        this.motionDetected = true;
-        this.service.updateCharacteristic(this.platform.Characteristic.MotionDetected, true);
-        this.platform.log.info(`${this.accessory.displayName}: motion detected`);
-
-        this.clearTimer = setTimeout(() => {
-          this.motionDetected = false;
-          this.service.updateCharacteristic(this.platform.Characteristic.MotionDetected, false);
-          this.platform.log.debug(`${this.accessory.displayName}: motion cleared`);
-        }, MOTION_WINDOW_MS);
+        this.triggerMotion();
       }
     } catch (error) {
       this.platform.log.error(`${this.accessory.displayName}: motion poll failed:`, error);

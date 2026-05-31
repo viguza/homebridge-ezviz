@@ -14,6 +14,7 @@ import {
   EZVIZ_DEVICES_ENDPOINT,
   EZVIZ_SWITCH_STATUS_ENDPOINT,
   EZVIZ_UNIFIEDMSG_ENDPOINT,
+  EZVIZ_SERVER_INFO_ENDPOINT,
   EZVIZ_DEFENCE_MODE_ENDPOINT,
   EZVIZ_DEFENCE_MODE_GET_ENDPOINT,
   API_ENDPOINT_REFRESH,
@@ -105,6 +106,7 @@ export class EZVIZAPI {
           rfSessionId: login.loginSession.rfSessionId,
           featureCode: emailHash,
           cuName: this.randomStr(24),
+          username: login.loginUser?.username,
         };
         this.sessionId = login.loginSession.sessionId;
         this.config.credentials = credentials;
@@ -213,6 +215,30 @@ export class EZVIZAPI {
     } catch (error) {
       this.log?.error('Error fetching domain:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Returns the MQTT push address from the server info endpoint.
+   * Used to connect the MQTT client for real-time push notifications.
+   */
+  async getServiceUrls(): Promise<string | null> {
+    try {
+      const response = await sendRequest(
+        this.config,
+        this.config.domain,
+        EZVIZ_SERVER_INFO_ENDPOINT,
+        'GET',
+      ) as Record<string, unknown>;
+      const sysConfig = response?.systemConfigInfo as Record<string, unknown> | undefined;
+      const pushAddr = (sysConfig?.pushAddr as string) ?? null;
+      if (pushAddr && this.config.credentials) {
+        this.config.credentials.pushAddr = pushAddr;
+      }
+      return pushAddr;
+    } catch (error) {
+      this.log?.debug('Could not fetch service URLs:', error);
+      return null;
     }
   }
 
