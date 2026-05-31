@@ -2,6 +2,7 @@ import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAcces
 import { SmartPlug } from './accessories/smart-plug.js';
 import { IPCamera } from './accessories/ip-camera.js';
 import { AlarmModeSwitch } from './accessories/alarm-mode-switch.js';
+import { MotionSensor } from './accessories/motion-sensor.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { EZVIZAPI } from './api/ezviz-api.js';
 import { EZVIZConfig, CameraConfig } from './types/config.js';
@@ -138,6 +139,12 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
         }
 
         this.discoveredCacheUUIDs.push(device.UUID);
+
+        if (device.Type === DeviceTypes.IPC || device.Type === DeviceTypes.CatEye) {
+          if ((device.HBConfig as CameraConfig | undefined)?.motionSensor) {
+            this.createMotionSensor(ezvizAPI, device);
+          }
+        }
       }
 
       // Create a single alarm mode switch accessory
@@ -186,6 +193,26 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     } catch (error) {
       this.log.error(`Error creating accessory for ${accessory.displayName}:`, error);
     }
+  }
+
+  private createMotionSensor(ezvizAPI: EZVIZAPI, device: DeviceData) {
+    const uuid = this.api.hap.uuid.generate(`${device.Serial}-motion`);
+    const name = `${device.Name} Motion`;
+    const existing = this.accessories.get(uuid);
+
+    if (existing) {
+      this.log.debug(`Restoring existing motion sensor from cache: ${existing.displayName}`);
+      existing.context.serial = device.Serial;
+      new MotionSensor(ezvizAPI, this, existing);
+    } else {
+      this.log.info(`Adding new motion sensor: ${name}`);
+      const accessory = new this.api.platformAccessory(name, uuid);
+      accessory.context.serial = device.Serial;
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      new MotionSensor(ezvizAPI, this, accessory);
+    }
+
+    this.discoveredCacheUUIDs.push(uuid);
   }
 
   /**

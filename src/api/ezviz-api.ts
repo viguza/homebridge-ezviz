@@ -13,6 +13,7 @@ import {
   EZVIZ_AUTH_ENDPOINT,
   EZVIZ_DEVICES_ENDPOINT,
   EZVIZ_SWITCH_STATUS_ENDPOINT,
+  EZVIZ_UNIFIEDMSG_ENDPOINT,
   EZVIZ_DEFENCE_MODE_ENDPOINT,
   EZVIZ_DEFENCE_MODE_GET_ENDPOINT,
   API_ENDPOINT_REFRESH,
@@ -241,6 +242,52 @@ export class EZVIZAPI {
       return info as ListDevicesResponse;
     } catch (error) {
       this.log?.error('Error fetching devices:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Returns the timestamp (ms) of the most recent alarm for a device, or null if none.
+   * Fetches up to 10 recent messages and filters client-side — the API ignores the
+   * deviceSerials query param and always returns global results.
+   * The EZVIZ API may return the epoch in seconds or milliseconds; values > 1e10 are ms.
+   */
+  async getLastAlarmTime(serialNumber: string): Promise<number | null> {
+    if (!this.sessionId) {
+      try {
+        await this.authenticate();
+      } catch (error) {
+        this.log?.error('Failed to authenticate before fetching alarm time:', error);
+        throw error;
+      }
+    }
+
+    try {
+      const query = querystring.stringify({
+        deviceSerials: serialNumber,
+        limit: 10,
+        stype: '92',
+      });
+
+      const response = await sendRequest(
+        this.config,
+        this.config.domain,
+        `${EZVIZ_UNIFIEDMSG_ENDPOINT}?${query}`,
+        'GET',
+      ) as { message?: Array<{ time?: number | string; deviceSerial?: string }>; messages?: Array<{ time?: number | string; deviceSerial?: string }> };
+
+      const messages = response?.message ?? response?.messages ?? [];
+      this.log?.debug(`getLastAlarmTime(${serialNumber}): ${messages.length} message(s), first deviceSerial=${messages[0]?.deviceSerial ?? 'none'}`);
+
+      const latest = messages.find(m => m.deviceSerial === serialNumber);
+      if (!latest?.time) {
+        return null;
+      }
+
+      const ts = typeof latest.time === 'string' ? parseFloat(latest.time) : latest.time;
+      return isNaN(ts) ? null : (ts > 1e10 ? ts : ts * 1000);
+    } catch (error) {
+      this.log?.error('Error fetching last alarm time:', error);
       throw error;
     }
   }

@@ -1437,6 +1437,12 @@
               "description": "Enable this if your device has multiple physical cameras (e.g., H9c dual camera). This will create separate accessories for each camera lens.",
               "type": "boolean",
               "default": false
+            },
+            "motionSensor": {
+              "title": "Motion Sensor",
+              "description": "Creates a motion sensor accessory that polls the EZVIZ alarm history every 30 seconds. Motion stays active for 60 seconds after the last alarm.",
+              "type": "boolean",
+              "default": false
             }
           }
         }
