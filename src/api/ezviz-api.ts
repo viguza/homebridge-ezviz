@@ -251,7 +251,7 @@ export class EZVIZAPI {
    * @param type - The switch type
    * @param value - The value to set (true/false)
    */
-  async setSwitchState(serialNumber: string, type: number, value: boolean): Promise<void> {
+  async setSwitchState(serialNumber: string, type: number, value: boolean, channel = 0): Promise<void> {
     if (!serialNumber) {
       throw new Error('Serial number is required');
     }
@@ -265,7 +265,43 @@ export class EZVIZAPI {
       }
     }
 
-    const config: AxiosRequestConfig = {
+    const enable = value ? 1 : 0;
+
+    // v3: PUT /v3/devices/{serial}/{channel}/{enable}/{switchType}/switchStatus
+    // Uses clientType "3" (Android web) and okhttp agent — required by v3 endpoints.
+    const v3Url = `${this.config.domain}/v3/devices/${serialNumber}/${channel}/${enable}/${type}/switchStatus`;
+    const v3Config: AxiosRequestConfig = {
+      method: 'put',
+      url: v3Url,
+      headers: {
+        'sessionId': this.sessionId,
+        'clientType': '3',
+        'featureCode': this.config.credentials?.featureCode ?? '',
+        'User-Agent': 'okhttp/3.12.1',
+        'appId': 'ys7',
+        'clientNo': 'web_site',
+        'lang': 'en',
+      },
+    };
+
+    try {
+      const response = await axios(v3Config);
+      if (response.data?.meta?.code && response.data.meta.code !== 200) {
+        throw new Error(`Switch update failed: ${response.data.meta.code} - ${response.data.meta.message}`);
+      }
+      return;
+    } catch (error) {
+      const axErr = error as { response?: { status?: number; data?: unknown } };
+      const status = axErr.response?.status;
+      this.log?.debug(`v3 switch returned ${status} for type ${type}: ${JSON.stringify(axErr.response?.data)}`);
+      if (status !== 403 && status !== 404) {
+        this.log?.error('Error setting switch state (v3):', error);
+        throw error;
+      }
+    }
+
+    // Legacy fallback: POST /api/device/switchStatus
+    const legacyConfig: AxiosRequestConfig = {
       method: 'post',
       url: `${this.config.domain}${EZVIZ_SWITCH_STATUS_ENDPOINT}`,
       headers: {
@@ -274,24 +310,20 @@ export class EZVIZAPI {
         'user-agent': EZVIZ_USER_AGENT,
       },
       data: querystring.stringify({
-        channel: 0,
-        clientType: 1,
-        enable: value ? 1 : 0,
         serial: serialNumber,
-        type: type,
+        enable: String(enable),
+        type: String(type),
+        channel: String(channel),
       }),
     };
 
     try {
-      const response = await axios(config);
-      
+      const response = await axios(legacyConfig);
       if (response.data?.retcode) {
-        throw new Error(`Switch state update failed: ${response.data.retcode}`);
+        throw new Error(`Switch state update failed (legacy): ${response.data.retcode}`);
       }
-      
-      return response.data;
     } catch (error) {
-      this.log?.error('Error setting switch state:', error);
+      this.log?.error('Error setting switch state (legacy):', error);
       throw error;
     }
   }

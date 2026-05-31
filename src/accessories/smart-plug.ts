@@ -43,7 +43,7 @@ export class SmartPlug {
   async setOnState(value: CharacteristicValue) {
     try {
       const action = value ? true : false;
-      await this.api.setSwitchState(this.accessory.context.device.Serial, SwitchTypes.On, action);
+      await this.api.setSwitchState(this.accessory.context.device.Serial, SwitchTypes.Plug, action);
       this.platform.log.debug(`Successfully set ${this.accessory.context.device.Name} to ${action ? 'ON' : 'OFF'}`);
     } catch (error) {
       this.platform.log.error(`Unable to set switch state for ${this.accessory.context.device.Name}:`, error);
@@ -57,7 +57,7 @@ export class SmartPlug {
    */
   async getOnState(): Promise<CharacteristicValue> {
     try {
-      const state = await this.api.getSwitchState(this.accessory.context.device.Serial, SwitchTypes.On);
+      const state = await this.api.getSwitchState(this.accessory.context.device.Serial, SwitchTypes.Plug);
       this.platform.log.debug(`${this.accessory.context.device.Name} is currently ${state ? 'ON' : 'OFF'}`);
       return state;
     } catch (error) {

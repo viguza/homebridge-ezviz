@@ -279,10 +279,12 @@ describe('EZVIZAPI', () => {
       expect(axios).toHaveBeenCalled();
     });
 
-    test('should log error if set switch fails', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Set switch state failed'));
+    test('should log error if v3 switch request fails with non-403 error', async () => {
+      const networkError = new Error('Set switch state failed');
+      (networkError as unknown as { response: { status: number } }).response = { status: 500 };
+      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(networkError);
       await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Set switch state failed');
-      expect(mockLog.error).toHaveBeenCalledWith('Error setting switch state:', expect.any(Error));
+      expect(mockLog.error).toHaveBeenCalledWith('Error setting switch state (v3):', expect.any(Error));
     });
 
     test('should throw error if serialNumber is missing', async () => {
@@ -296,9 +298,9 @@ describe('EZVIZAPI', () => {
       expect(mockLog.error).toHaveBeenCalledWith('Failed to authenticate before setting switch state:', expect.any(Error));
     });
 
-    test('should throw error if switch state update fails with retcode', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { retcode: 999 } });
-      await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Switch state update failed: 999');
+    test('should throw error if v3 switch response contains non-200 meta code', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { meta: { code: 400, message: 'Bad Request' } } });
+      await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Switch update failed: 400');
     });
   });
 

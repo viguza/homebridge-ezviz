@@ -2,11 +2,12 @@ import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAcces
 import { SmartPlug } from './accessories/smart-plug.js';
 import { IPCamera } from './accessories/ip-camera.js';
 import { AlarmModeSwitch } from './accessories/alarm-mode-switch.js';
+import { CameraSwitch } from './accessories/camera-switch.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { EZVIZAPI } from './api/ezviz-api.js';
 import { EZVIZConfig, CameraConfig } from './types/config.js';
 import { Credentials } from './types/login.js';
-import { DeviceTypes } from './utils/enums.js';
+import { DeviceTypes, SwitchTypes } from './utils/enums.js';
 import { ListDevicesResponse } from './types/devices.js';
 import { DeviceData } from './types/data.js';
 
@@ -138,6 +139,13 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
         }
 
         this.discoveredCacheUUIDs.push(device.UUID);
+
+        if (device.Type === DeviceTypes.IPC || device.Type === DeviceTypes.CatEye) {
+          const camConfig = device.HBConfig as CameraConfig | undefined;
+          if (camConfig?.sleepSwitch) {
+            this.createCameraSwitch(ezvizAPI, device, SwitchTypes.Sleep, 'Privacy');
+          }
+        }
       }
 
       // Create a single alarm mode switch accessory
@@ -186,6 +194,31 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     } catch (error) {
       this.log.error(`Error creating accessory for ${accessory.displayName}:`, error);
     }
+  }
+
+  private createCameraSwitch(ezvizAPI: EZVIZAPI, device: DeviceData, switchType: SwitchTypes, label: string) {
+    const uuid = this.api.hap.uuid.generate(`${device.Serial}-switch-${switchType}`);
+    const name = `${device.Name} ${label}`;
+    const channelNo = device.Switches?.find(s => s.type === switchType)?.channelNo ?? 0;
+    const existing = this.accessories.get(uuid);
+
+    if (existing) {
+      this.log.debug(`Restoring existing ${label} switch from cache: ${existing.displayName}`);
+      existing.context.serial = device.Serial;
+      existing.context.switchType = switchType;
+      existing.context.channelNo = channelNo;
+      new CameraSwitch(ezvizAPI, this, existing);
+    } else {
+      this.log.info(`Adding new ${label} switch: ${name}`);
+      const accessory = new this.api.platformAccessory(name, uuid);
+      accessory.context.serial = device.Serial;
+      accessory.context.switchType = switchType;
+      accessory.context.channelNo = channelNo;
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      new CameraSwitch(ezvizAPI, this, accessory);
+    }
+
+    this.discoveredCacheUUIDs.push(uuid);
   }
 
   /**

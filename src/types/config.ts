@@ -12,6 +12,7 @@ export type PlugConfig = DeviceConfig
 export interface CameraConfig extends DeviceConfig {
   username: string;
   dualCamera?: boolean;
+  sleepSwitch?: boolean;
 }
 
 export interface EZVIZConfig extends PlatformConfig {
