@@ -14,6 +14,12 @@ export interface ConnectionInfo {
   upnp: boolean;
 }
 
+export interface WifiInfo {
+  address: string;
+  ssid?: string;
+  netType?: string;
+}
+
 interface Connection {
   [deviceSerial: string]: ConnectionInfo;
 }
@@ -119,8 +125,13 @@ export interface DeviceInfo {
   tags: null | string[];
 }
 
+interface Wifi {
+  [deviceSerial: string]: WifiInfo;
+}
+
 export interface ListDevicesResponse {
   CONNECTION: Connection;
+  WIFI: Wifi;
   STATUS: Status;
   meta: Meta;
   NODISTURB: Record<string, unknown>;

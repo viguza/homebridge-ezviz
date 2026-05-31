@@ -231,7 +231,7 @@ export class EZVIZAPI {
 
     try {
       const query = querystring.stringify({
-        filter: 'CONNECTION,SWITCH,STATUS,NODISTURB,P2P,FEATURE,DETECTOR',
+        filter: 'CONNECTION,WIFI,SWITCH,STATUS,NODISTURB,P2P,FEATURE,DETECTOR',
         groupId: DEFAULT_GROUP_ID,
         limit: 30,
         offset: 0,
