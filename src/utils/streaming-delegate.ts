@@ -95,14 +95,21 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     });
   }
 
+  private getRtspUrl(): string {
+    const ip = this.deviceData.Wifi?.address && this.deviceData.Wifi.address !== '0.0.0.0'
+      ? this.deviceData.Wifi.address
+      : this.deviceData.Connection.localIp;
+    const port = this.deviceData.Connection.localRtspPort || 554;
+    const channel = this.deviceData.DeviceInfo.channelNumber || 1;
+    return `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@${ip}:${port}/Streaming/Channels/${channel}/`;
+  }
+
   handleSnapshotRequest(request: SnapshotRequest, callback: SnapshotRequestCallback): void {
     const sleepSwitch = this.deviceData.Switches?.find((x) => x.type === SwitchTypes.Sleep);
     if (sleepSwitch?.enable) {
       this.getOfflineImage(callback);
     } else {
-      const url = `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@` +
-                  `${this.deviceData.Connection.localIp}/Streaming/Channels/` +
-                  `${this.deviceData.DeviceInfo.channelNumber}/`;
+      const url = this.getRtspUrl();
       getSnapshot(url)
         .then((snapshot) => {
           callback(undefined, snapshot);
@@ -183,8 +190,6 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     const videoSsrc = sessionInfo.videoSSRC;
     const videoSRTP = sessionInfo.videoSRTP.toString('base64');
     const address = sessionInfo.address;
-    // Multiply the bitrate because homekit requests extremely low bitrates
-    const bitrate = videoInfo.max_bit_rate * 4;
 
     const videoPayloadType = videoInfo.pt;
     const mtu = videoInfo.mtu; // maximum transmission unit
@@ -199,33 +204,18 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     const sampleRate = audioInfo.sample_rate;
 
     let command = [
-      '-i',
-      `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@` +
-      `${this.deviceData.Connection.localIp}/Streaming/Channels/` +
-      `${this.deviceData.DeviceInfo.channelNumber}/`,
-      '-map',
-      '0:0',
-      '-c:v',
-      'copy',
-      '-b:v',
-      `${bitrate}k`,
-      '-bufsize',
-      `${bitrate}k`,
-      '-maxrate',
-      `${2 * bitrate}k`,
-      '-pix_fmt',
-      'yuv420p',
+      '-rtsp_transport', 'tcp',
+      '-use_wallclock_as_timestamps', '1',
+      '-i', this.getRtspUrl(),
+      '-map', '0:0',
+      '-c:v', 'copy',
+      '-pix_fmt', 'yuv420p',
       '-an',
-      '-payload_type',
-      videoPayloadType.toString(),
-      '-ssrc',
-      videoSsrc.toString(),
-      '-f',
-      'rtp',
-      '-srtp_out_suite',
-      'AES_CM_128_HMAC_SHA1_80',
-      '-srtp_out_params',
-      videoSRTP,
+      '-payload_type', videoPayloadType.toString(),
+      '-ssrc', videoSsrc.toString(),
+      '-f', 'rtp',
+      '-srtp_out_suite', 'AES_CM_128_HMAC_SHA1_80',
+      '-srtp_out_params', videoSRTP,
       `srtp://${address}:${videoPort}?rtcpport=${videoPort}&localrtcpport=${returnVideoPort}&pkt_size=${mtu}`,
     ];
 
@@ -242,6 +232,8 @@ export class StreamingDelegate implements CameraStreamingDelegate {
           '-ac',
           '1',
           '-vn',
+          '-af',
+          'aresample=async=1:min_hard_comp=0.100000:first_pts=0',
           '-ar',
           `${sampleRate}k`,
           '-b:a',

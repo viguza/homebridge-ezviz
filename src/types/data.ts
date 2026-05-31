@@ -1,5 +1,5 @@
 import { DeviceConfig } from './config.js';
-import { ConnectionInfo, DeviceStatus, SwitchItem, P2PItem, ResourceInfo, DeviceInfo } from './devices.js';
+import { ConnectionInfo, WifiInfo, DeviceStatus, SwitchItem, P2PItem, ResourceInfo, DeviceInfo } from './devices.js';
 
 export interface DeviceData {
   UUID: string;
@@ -7,6 +7,7 @@ export interface DeviceData {
   Name: string;
   Type: string;
   Connection: ConnectionInfo;
+  Wifi?: WifiInfo;
   Status: DeviceStatus;
   Switches: SwitchItem[];
   P2P: P2PItem[];
