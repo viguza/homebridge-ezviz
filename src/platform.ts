@@ -6,7 +6,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { EZVIZAPI } from './api/ezviz-api.js';
 import { EZVIZConfig, CameraConfig } from './types/config.js';
 import { Credentials } from './types/login.js';
-import { DeviceTypes } from './utils/enums.js';
+import { DeviceTypes, CAMERA_DEVICE_TYPES } from './utils/enums.js';
 import { ListDevicesResponse } from './types/devices.js';
 import { DeviceData } from './types/data.js';
 
@@ -178,7 +178,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     try {
       if (deviceType === DeviceTypes.Socket) {
         new SmartPlug(ezvizAPI, this, accessory);
-      } else if (deviceType === DeviceTypes.IPC || deviceType === DeviceTypes.CatEye) {
+      } else if (CAMERA_DEVICE_TYPES.has(deviceType as DeviceTypes)) {
         new IPCamera(ezvizAPI, this, accessory);
       } else {
         this.log.warn(`Unsupported device type: ${deviceType}`);
@@ -208,7 +208,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       let deviceConfig;
       if (deviceType === DeviceTypes.Socket) {
         deviceConfig = this.config.plugs?.find((plug) => plug.serial === device.deviceSerial);
-      } else if (deviceType === DeviceTypes.IPC || deviceType === DeviceTypes.CatEye) {
+      } else if (CAMERA_DEVICE_TYPES.has(deviceType)) {
         deviceConfig = this.config.cameras?.find((camera) => camera.serial === device.deviceSerial);
         if (!deviceConfig) {
           this.log.info(`Camera ${device.name} (${device.deviceSerial}) is not configured and will be skipped`);
@@ -222,7 +222,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       }
 
       // Check if this is a dual camera
-      const isDualCamera = deviceType === DeviceTypes.IPC && (deviceConfig as CameraConfig).dualCamera;
+      const isDualCamera = deviceType === DeviceTypes.IPC && !!(deviceConfig as CameraConfig)?.dualCamera;
 
       if (isDualCamera) {
         // Create two separate camera accessories for dual camera devices
