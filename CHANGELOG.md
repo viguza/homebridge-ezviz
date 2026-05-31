@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.8.0] - 2026-05-31
+
+### Added
+- MQTT push for real-time motion detection — when MQTT connects successfully, polling stops and motion events arrive instantly instead of within 30 seconds (#29)
+  - Connects to the EZVIZ push broker using the same credentials as pyEzvizApi and the Home Assistant integration
+  - Automatically falls back to polling if MQTT fails to connect
+  - Auto-reconnects every 5 seconds on disconnect; polling stays off during reconnection
+
 ## [1.7.0] - 2026-05-31
 
 ### Added
