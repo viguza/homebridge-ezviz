@@ -3,6 +3,7 @@ import { SmartPlug } from './accessories/smart-plug.js';
 import { IPCamera } from './accessories/ip-camera.js';
 import { AlarmModeSwitch } from './accessories/alarm-mode-switch.js';
 import { MotionSensor } from './accessories/motion-sensor.js';
+import { EzvizMqttClient } from './utils/mqtt-client.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { EZVIZAPI } from './api/ezviz-api.js';
 import { EZVIZConfig, CameraConfig } from './types/config.js';
@@ -19,9 +20,10 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
 
-  // this is used to track restored cached accessories
   public readonly accessories: Map<string, PlatformAccessory> = new Map();
   public readonly discoveredCacheUUIDs: string[] = [];
+  private readonly motionSensors: Map<string, MotionSensor> = new Map();
+  private mqttClient: EzvizMqttClient | null = null;
 
   constructor(
     public readonly log: Logging,
@@ -55,6 +57,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
         }, 3600000 * 12);
         
         await this.discoverDevices(ezvizAPI);
+        await this.startMqtt(ezvizAPI);
       } else {
         this.log.error('Could not authenticate with EZVIZ API. Please check your credentials.');
       }
@@ -199,20 +202,55 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     const uuid = this.api.hap.uuid.generate(`${device.Serial}-motion`);
     const name = `${device.Name} Motion`;
     const existing = this.accessories.get(uuid);
+    let sensor: MotionSensor;
 
     if (existing) {
       this.log.debug(`Restoring existing motion sensor from cache: ${existing.displayName}`);
       existing.context.serial = device.Serial;
-      new MotionSensor(ezvizAPI, this, existing);
+      sensor = new MotionSensor(ezvizAPI, this, existing);
     } else {
       this.log.info(`Adding new motion sensor: ${name}`);
       const accessory = new this.api.platformAccessory(name, uuid);
       accessory.context.serial = device.Serial;
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      new MotionSensor(ezvizAPI, this, accessory);
+      sensor = new MotionSensor(ezvizAPI, this, accessory);
     }
 
+    this.motionSensors.set(device.Serial, sensor);
     this.discoveredCacheUUIDs.push(uuid);
+  }
+
+  private async startMqtt(ezvizAPI: EZVIZAPI): Promise<void> {
+    if (this.motionSensors.size === 0) {
+      return;
+    }
+    try {
+      const pushAddr = await ezvizAPI.getServiceUrls();
+      const creds = this.config.credentials;
+      if (!pushAddr || !creds?.username || !creds?.sessionId) {
+        this.log.debug('MQTT: missing pushAddr or credentials, skipping');
+        return;
+      }
+      this.mqttClient = new EzvizMqttClient(
+        pushAddr,
+        creds.sessionId,
+        creds.username,
+        (serial, alarmTime) => {
+          const sensor = this.motionSensors.get(serial);
+          if (sensor) {
+            sensor.onMqttAlarm(alarmTime);
+          }
+        },
+        this.log,
+      );
+      await this.mqttClient.connect();
+      this.log.info('MQTT push connected — stopping polling on all motion sensors');
+      for (const sensor of this.motionSensors.values()) {
+        sensor.stopPolling();
+      }
+    } catch (error) {
+      this.log.warn('MQTT push failed to connect, motion sensors will fall back to polling:', (error as Error).message);
+    }
   }
 
   /**

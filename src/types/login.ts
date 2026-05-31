@@ -79,6 +79,8 @@ export interface Credentials {
   featureCode: string;
   rfSessionId: string;
   cuName: string;
+  username?: string;
+  pushAddr?: string;
 }
 
 export interface RequestHeaders {
