@@ -2,10 +2,10 @@ import axios, { AxiosRequestConfig } from 'axios';
 import querystring from 'querystring';
 import crypto, { randomBytes } from 'crypto';
 import { Logging } from 'homebridge';
-import { Domain, Credentials, Login } from '../types/login.js';
+import { Domain, Credentials, Login, RefreshSession } from '../types/login.js';
 import { ListDevicesResponse } from '../types/devices.js';
 import { EZVIZConfig } from '../types/config.js';
-import { 
+import {
   EZVIZ_CLIENT_TYPE,
   EZVIZ_USER_AGENT,
   EZVIZ_BASE_API_URL,
@@ -15,6 +15,7 @@ import {
   EZVIZ_SWITCH_STATUS_ENDPOINT,
   EZVIZ_DEFENCE_MODE_ENDPOINT,
   EZVIZ_DEFENCE_MODE_GET_ENDPOINT,
+  API_ENDPOINT_REFRESH,
   RUSSIA_DOMAIN,
   RUSSIA_AREA_ID,
   DEFAULT_GROUP_ID,
@@ -114,6 +115,63 @@ export class EZVIZAPI {
     } catch (error) {
       this.log?.error('Unable to login:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Refreshes the session using the refresh token, falling back to full re-authentication
+   * if the refresh token is missing or rejected.
+   * @returns Promise resolving to updated credentials or undefined on failure
+   */
+  async refreshSession(): Promise<Credentials | undefined> {
+    const creds = this.config.credentials;
+
+    if (!creds?.rfSessionId) {
+      this.log?.debug('No refresh token available, falling back to full re-authentication');
+      return this.authenticate();
+    }
+
+    const data = querystring.stringify({
+      cuName: creds.cuName,
+      featureCode: creds.featureCode,
+      refreshSessionId: creds.rfSessionId,
+    });
+
+    const config: AxiosRequestConfig = {
+      method: 'put',
+      url: `${this.config.domain}${API_ENDPOINT_REFRESH}`,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'clientType': EZVIZ_CLIENT_TYPE,
+        'User-Agent': EZVIZ_USER_AGENT,
+        'sessionId': this.sessionId ?? '',
+      },
+      data,
+    };
+
+    try {
+      const response = await axios(config);
+      const result = response.data as RefreshSession;
+
+      if (result.meta?.code !== 200) {
+        this.log?.debug(`Session refresh rejected (code ${result.meta?.code}), falling back to full re-authentication`);
+        return this.authenticate();
+      }
+
+      const updated: Credentials = {
+        sessionId: result.sessionInfo.sessionId,
+        rfSessionId: result.sessionInfo.refreshSessionId,
+        featureCode: creds.featureCode,
+        cuName: creds.cuName,
+      };
+
+      this.sessionId = updated.sessionId;
+      this.config.credentials = updated;
+      this.log?.debug('Session refreshed successfully');
+      return updated;
+    } catch (error) {
+      this.log?.debug('Session refresh failed, falling back to full re-authentication:', error);
+      return this.authenticate();
     }
   }
 

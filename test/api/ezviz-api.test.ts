@@ -146,6 +146,100 @@ describe('EZVIZAPI', () => {
     });
   });
 
+  describe('refreshSession', () => {
+    beforeEach(() => {
+      ezvizApi.sessionId = 'mockSessionId';
+    });
+
+    test('should refresh credentials and update sessionId on success', async () => {
+      const mockResponse = {
+        data: {
+          meta: { code: 200 },
+          sessionInfo: {
+            sessionId: 'newSessionId',
+            refreshSessionId: 'newRfSessionId',
+          },
+        },
+      };
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce(mockResponse);
+
+      const credentials = await ezvizApi.refreshSession();
+
+      expect(credentials?.sessionId).toBe('newSessionId');
+      expect(credentials?.rfSessionId).toBe('newRfSessionId');
+      expect(ezvizApi.sessionId).toBe('newSessionId');
+      expect(mockConfig.credentials.sessionId).toBe('newSessionId');
+    });
+
+    test('should preserve featureCode and cuName from existing credentials', async () => {
+      const mockResponse = {
+        data: {
+          meta: { code: 200 },
+          sessionInfo: {
+            sessionId: 'newSessionId',
+            refreshSessionId: 'newRfSessionId',
+          },
+        },
+      };
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce(mockResponse);
+
+      const credentials = await ezvizApi.refreshSession();
+
+      expect(credentials?.featureCode).toBe(mockCredentials.featureCode);
+      expect(credentials?.cuName).toBe(mockCredentials.cuName);
+    });
+
+    test('should fall back to authenticate() when rfSessionId is missing', async () => {
+      mockConfig.credentials = { ...mockCredentials, rfSessionId: undefined as unknown as string };
+      const authenticateSpy = jest.spyOn(ezvizApi, 'authenticate').mockResolvedValueOnce(mockCredentials);
+      const axiosCallsBefore = (axios as jest.MockedFunction<typeof axios>).mock.calls.length;
+
+      await ezvizApi.refreshSession();
+
+      expect(authenticateSpy).toHaveBeenCalledTimes(1);
+      expect((axios as jest.MockedFunction<typeof axios>).mock.calls.length).toBe(axiosCallsBefore);
+    });
+
+    test('should fall back to authenticate() when API returns non-200', async () => {
+      const mockResponse = {
+        data: { meta: { code: 401 } },
+      };
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce(mockResponse);
+      const authenticateSpy = jest.spyOn(ezvizApi, 'authenticate').mockResolvedValueOnce(mockCredentials);
+
+      await ezvizApi.refreshSession();
+
+      expect(authenticateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    test('should fall back to authenticate() on network error', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Network error'));
+      const authenticateSpy = jest.spyOn(ezvizApi, 'authenticate').mockResolvedValueOnce(mockCredentials);
+
+      await ezvizApi.refreshSession();
+
+      expect(authenticateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    test('should send PUT to the refresh endpoint with correct payload', async () => {
+      const mockResponse = {
+        data: {
+          meta: { code: 200 },
+          sessionInfo: { sessionId: 'newSessionId', refreshSessionId: 'newRfSessionId' },
+        },
+      };
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce(mockResponse);
+
+      await ezvizApi.refreshSession();
+
+      expect(axios).toHaveBeenCalledWith(expect.objectContaining({
+        method: 'put',
+        url: expect.stringContaining('/v3/apigateway/login'),
+        data: expect.stringContaining('refreshSessionId=mockRfSessionId'),
+      }));
+    });
+  });
+
   describe('getDeviceList', () => {
     beforeEach(() => {
       ezvizApi.sessionId = 'mockSessionId';

@@ -43,13 +43,13 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       const credentials = await this.authenticate(ezvizAPI);
       
       if (credentials) {
-        // Set up re-authentication every 12 hours
+        // Refresh session every 12 hours (uses refresh token, falls back to full re-auth)
         setInterval(async () => {
-          this.log.debug('Reauthenticating to EZVIZ API');
+          this.log.debug('Refreshing EZVIZ session');
           try {
-            await this.authenticate(ezvizAPI);
+            await ezvizAPI.refreshSession();
           } catch (error) {
-            this.log.error('Re-authentication failed:', error);
+            this.log.error('Session refresh failed:', error);
           }
         }, 3600000 * 12);
         
