@@ -122,7 +122,7 @@ Add the following to your Homebridge `config.json` file:
 | `serial` | string | Yes | Camera serial number |
 | `username` | string | Yes | Camera username (usually "admin") |
 | `code` | string | Yes | Camera verification code |
-| `motionSensor` | boolean | No | Creates a motion sensor accessory (polls alarm history every 30 s) |
+| `motionSensor` | boolean | No | Creates a motion sensor accessory — uses MQTT real-time push for instant alerts, with 30 s polling as fallback |
 | `dualCamera` | boolean | No | Enable for devices with two physical lenses (e.g. H9c) |
 
 ### Smart Plug Configuration

@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.8.1] - 2026-05-31
+
+### Fixed
+- MQTT events not received: the EZVIZ broker does not reliably deliver QoS 2 messages via MQTT.js; switched to QoS 1, which resolves the issue
+- MQTT keepalive set to 30 s to avoid the broker's 60 s server-side timeout dropping the connection every minute
+- Subscription is now skipped on reconnects where the broker restores a stored session (`sessionPresent=true`), matching pyEzvizApi behaviour
+
+### Changed
+- MQTT and polling now run in parallel: MQTT fires motion events immediately, polling continues as a 30 s fallback (previously polling was stopped when MQTT connected)
+- Motion window reduced from 90 s to 60 s
+- `triggerMotion` is now idempotent — only emits the HomeKit update once per motion event and resets the auto-clear timer on repeated calls
+- Debug logging added for MQTT register/startPush responses, raw message topic, subscribe grant, `sessionPresent`, and connection lifecycle events
+
 ## [1.8.0] - 2026-05-31
 
 ### Added
