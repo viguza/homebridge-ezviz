@@ -307,11 +307,15 @@ export class EZVIZAPI {
 
       const latest = messages.find(m => m.deviceSerial === serialNumber);
       if (!latest?.time) {
+        this.log?.debug(`getLastAlarmTime(${serialNumber}): no matching message found`);
         return null;
       }
 
+      this.log?.debug(`getLastAlarmTime(${serialNumber}): raw time=${JSON.stringify(latest.time)}`);
       const ts = typeof latest.time === 'string' ? parseFloat(latest.time) : latest.time;
-      return isNaN(ts) ? null : (ts > 1e10 ? ts : ts * 1000);
+      const result = isNaN(ts) ? null : (ts > 1e10 ? ts : ts * 1000);
+      this.log?.debug(`getLastAlarmTime(${serialNumber}): resolved alarmTime=${result}`);
+      return result;
     } catch (error) {
       this.log?.error('Error fetching last alarm time:', error);
       throw error;

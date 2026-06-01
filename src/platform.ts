@@ -235,19 +235,18 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
         pushAddr,
         creds.sessionId,
         creds.username,
-        (serial, alarmTime) => {
+        (serial) => {
           const sensor = this.motionSensors.get(serial);
           if (sensor) {
-            sensor.onMqttAlarm(alarmTime);
+            sensor.onMqttAlarm();
+          } else {
+            this.log.debug(`MQTT: no motion sensor for serial=${serial}, ignoring`);
           }
         },
         this.log,
       );
       await this.mqttClient.connect();
-      this.log.info('MQTT push connected — stopping polling on all motion sensors');
-      for (const sensor of this.motionSensors.values()) {
-        sensor.stopPolling();
-      }
+      this.log.info('MQTT push connected — real-time alerts active, polling continues as fallback');
     } catch (error) {
       this.log.warn('MQTT push failed to connect, motion sensors will fall back to polling:', (error as Error).message);
     }
