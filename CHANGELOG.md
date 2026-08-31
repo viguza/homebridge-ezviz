@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.8.2] - 2026-08-31
+
+### Fixed
+- Homebridge "read handler for the characteristic 'On' was slow to respond / didn't respond at all" warnings (#32): reads of the smart plug and alarm mode switches went straight to the EZVIZ cloud and waited for a reply, exceeding the 9 s HomeKit read budget
+- All HTTP requests now use a 5 s timeout; previously they were unbounded, so a stalled connection hung until the OS TCP timeout
+- The alarm mode switch no longer reports the alarm as disarmed when a state read fails; an unreachable device now shows "No Response" instead of a stale or wrong value
+
+### Changed
+- Smart plug and alarm mode switches answer HomeKit reads from cached state and refresh in the background every 60 s, pushing updates with `updateCharacteristic` (the pattern the motion sensor already used)
+- The device list is cached for 30 s and concurrent callers share a single request, so reading state no longer triggers one full account listing per accessory; the cache is invalidated after a write
+
 ## [1.8.1] - 2026-05-31
 
 ### Fixed
