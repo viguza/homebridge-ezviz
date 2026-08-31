@@ -21,6 +21,8 @@ import {
   RUSSIA_DOMAIN,
   RUSSIA_AREA_ID,
   DEFAULT_GROUP_ID,
+  EZVIZ_REQUEST_TIMEOUT_MS,
+  DEVICE_LIST_CACHE_TTL_MS,
 } from './ezviz-constants.js';
 import { DefenceMode } from '../utils/enums.js';
 import { sendRequest } from './ezviz-requests.js';
@@ -32,6 +34,8 @@ export class EZVIZAPI {
   private config: EZVIZConfig;
   public sessionId: string | null;
   private log: Logging | undefined;
+  private deviceListCache: { data: ListDevicesResponse; expiresAt: number } | null = null;
+  private deviceListInFlight: Promise<ListDevicesResponse> | null = null;
 
   constructor(config: EZVIZConfig, log?: Logging) {
     this.config = config;
@@ -71,6 +75,7 @@ export class EZVIZAPI {
     });
     const config: AxiosRequestConfig = {
       method: 'post',
+      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
       url: `${this.config.domain}${EZVIZ_AUTH_ENDPOINT}`,
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
@@ -142,6 +147,7 @@ export class EZVIZAPI {
 
     const config: AxiosRequestConfig = {
       method: 'put',
+      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
       url: `${this.config.domain}${API_ENDPOINT_REFRESH}`,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -197,6 +203,7 @@ export class EZVIZAPI {
     const domainReq: AxiosRequestConfig = {
       headers: headers,
       method: 'POST',
+      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
       url: `${EZVIZ_BASE_API_URL}${EZVIZ_DOMAINS_ENDPOINT}`,
       data: querystring.stringify({
         areaId: id,
@@ -243,10 +250,14 @@ export class EZVIZAPI {
   }
 
   /**
-   * Lists all devices for the authenticated user
+   * Lists all devices for the authenticated user.
+   * Results are cached for DEVICE_LIST_CACHE_TTL_MS and concurrent callers share a
+   * single upstream request, so N accessories reading state do not each trigger a
+   * full account listing.
+   * @param forceRefresh - Bypass the cache and fetch a fresh list
    * @returns Promise resolving to device list or undefined if failed
    */
-  async listDevices(): Promise<ListDevicesResponse | undefined> {
+  async listDevices(forceRefresh = false): Promise<ListDevicesResponse | undefined> {
     if (!this.sessionId) {
       try {
         await this.authenticate();
@@ -256,6 +267,34 @@ export class EZVIZAPI {
       }
     }
 
+    if (!forceRefresh) {
+      if (this.deviceListCache && this.deviceListCache.expiresAt > Date.now()) {
+        this.log?.debug('Using cached device list');
+        return this.deviceListCache.data;
+      }
+
+      if (this.deviceListInFlight) {
+        this.log?.debug('Joining in-flight device list request');
+        return this.deviceListInFlight;
+      }
+    }
+
+    const request = this.fetchDeviceList();
+    this.deviceListInFlight = request;
+
+    try {
+      return await request;
+    } finally {
+      if (this.deviceListInFlight === request) {
+        this.deviceListInFlight = null;
+      }
+    }
+  }
+
+  /**
+   * Performs the actual device list request and populates the cache
+   */
+  private async fetchDeviceList(): Promise<ListDevicesResponse> {
     try {
       const query = querystring.stringify({
         filter: 'CONNECTION,WIFI,SWITCH,STATUS,NODISTURB,P2P,FEATURE,DETECTOR',
@@ -264,12 +303,26 @@ export class EZVIZAPI {
         offset: 0,
       });
 
-      const info = await sendRequest(this.config, this.config.domain, `${EZVIZ_DEVICES_ENDPOINT}?${query}`, 'GET');
-      return info as ListDevicesResponse;
+      const info = await sendRequest(
+        this.config,
+        this.config.domain,
+        `${EZVIZ_DEVICES_ENDPOINT}?${query}`,
+        'GET',
+      ) as ListDevicesResponse;
+      this.deviceListCache = { data: info, expiresAt: Date.now() + DEVICE_LIST_CACHE_TTL_MS };
+      return info;
     } catch (error) {
       this.log?.error('Error fetching devices:', error);
       throw error;
     }
+  }
+
+  /**
+   * Drops the cached device list so the next read fetches fresh state.
+   * Called after a write so a stale entry cannot revert the new value.
+   */
+  invalidateDeviceListCache(): void {
+    this.deviceListCache = null;
   }
 
   /**
@@ -344,6 +397,7 @@ export class EZVIZAPI {
 
     const config: AxiosRequestConfig = {
       method: 'post',
+      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
       url: `${this.config.domain}${EZVIZ_SWITCH_STATUS_ENDPOINT}`,
       headers: {
         'sessionid': this.sessionId,
@@ -366,6 +420,7 @@ export class EZVIZAPI {
         throw new Error(`Switch state update failed: ${response.data.retcode}`);
       }
       
+      this.invalidateDeviceListCache();
       return response.data;
     } catch (error) {
       this.log?.error('Error setting switch state:', error);
@@ -450,6 +505,7 @@ export class EZVIZAPI {
 
     const config: AxiosRequestConfig = {
       method: 'post',
+      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
       url: `${this.config.domain}${EZVIZ_DEFENCE_MODE_ENDPOINT}?${query}`,
       headers: {
         'sessionid': this.sessionId,
@@ -497,6 +553,7 @@ export class EZVIZAPI {
 
     const config: AxiosRequestConfig = {
       method: 'get',
+      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
       url: `${this.config.domain}${EZVIZ_DEFENCE_MODE_GET_ENDPOINT}?${query}`,
       headers: {
         'sessionid': this.sessionId,

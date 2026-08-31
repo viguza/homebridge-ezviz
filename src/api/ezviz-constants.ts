@@ -16,3 +16,10 @@ export const MQTT_PORT = 1882;
 export const RUSSIA_AREA_ID = 114;
 export const RUSSIA_DOMAIN = 'apiirus.ezvizru.com';
 export const DEFAULT_GROUP_ID = -1;
+
+// Requests made on a HomeKit read path must fail fast: hap-nodejs warns after 3s
+// and abandons the read 6s later, so an unbounded request shows as "No Response".
+export const EZVIZ_REQUEST_TIMEOUT_MS = 5000;
+// How long a fetched device list stays reusable, so simultaneous reads across
+// accessories collapse into a single upstream request.
+export const DEVICE_LIST_CACHE_TTL_MS = 30_000;

@@ -1,8 +1,10 @@
-import type { CharacteristicValue, PlatformAccessory } from 'homebridge';
+import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
 import type { EZVIZPlatform } from '../platform.js';
 import { EZVIZAPI } from '../api/ezviz-api.js';
 import { SwitchTypes } from '../utils/enums.js';
+
+const STATE_REFRESH_INTERVAL_MS = 60_000;
 
 /**
  * Smart Plug accessory for EZVIZ devices
@@ -10,6 +12,10 @@ import { SwitchTypes } from '../utils/enums.js';
  */
 export class SmartPlug {
   private api: EZVIZAPI;
+  private readonly plugService: Service;
+  private currentState = false;
+  private reachable = true;
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     api: EZVIZAPI,
@@ -25,15 +31,19 @@ export class SmartPlug {
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.device.Serial);
     
     // Set up the switch service
-    const plugService = this.accessory.getService(this.platform.Service.Switch) || 
+    this.plugService = this.accessory.getService(this.platform.Service.Switch) || 
                        this.accessory.addService(this.platform.Service.Switch);
     
-    plugService.setCharacteristic(this.platform.Characteristic.Name, this.accessory.context.device.Name);
+    this.plugService.setCharacteristic(this.platform.Characteristic.Name, this.accessory.context.device.Name);
     
-    // Set up event handlers
-    plugService.getCharacteristic(this.platform.Characteristic.On)
+    // Set up event handlers. The read answers from cached state so it never waits on
+    // the network — HomeKit abandons a read that takes longer than 9s.
+    this.plugService.getCharacteristic(this.platform.Characteristic.On)
       .onSet(this.setOnState.bind(this))
       .onGet(this.getOnState.bind(this));
+
+    this.refreshState();
+    this.refreshTimer = setInterval(() => this.refreshState(), STATE_REFRESH_INTERVAL_MS);
   }
 
   /**
@@ -44,6 +54,8 @@ export class SmartPlug {
     try {
       const action = value ? true : false;
       await this.api.setSwitchState(this.accessory.context.device.Serial, SwitchTypes.On, action);
+      this.currentState = action;
+      this.reachable = true;
       this.platform.log.debug(`Successfully set ${this.accessory.context.device.Name} to ${action ? 'ON' : 'OFF'}`);
     } catch (error) {
       this.platform.log.error(`Unable to set switch state for ${this.accessory.context.device.Name}:`, error);
@@ -52,17 +64,46 @@ export class SmartPlug {
   }
 
   /**
-   * Gets the current on/off state of the smart plug
-   * @returns Promise resolving to the current state
+   * Returns the last known on/off state without blocking on the network.
+   * Reports a communication failure when the most recent refresh could not reach
+   * the device, so HomeKit shows "No Response" instead of a stale value.
    */
-  async getOnState(): Promise<CharacteristicValue> {
+  getOnState(): CharacteristicValue {
+    if (!this.reachable) {
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+    return this.currentState;
+  }
+
+  /**
+   * Refreshes the cached state in the background and pushes any change to HomeKit
+   */
+  private async refreshState(): Promise<void> {
     try {
       const state = await this.api.getSwitchState(this.accessory.context.device.Serial, SwitchTypes.On);
-      this.platform.log.debug(`${this.accessory.context.device.Name} is currently ${state ? 'ON' : 'OFF'}`);
-      return state;
+      this.reachable = true;
+
+      if (state !== this.currentState) {
+        this.currentState = state;
+        this.plugService.updateCharacteristic(this.platform.Characteristic.On, state);
+        this.platform.log.debug(`${this.accessory.context.device.Name} is now ${state ? 'ON' : 'OFF'}`);
+      }
     } catch (error) {
-      this.platform.log.error(`${this.accessory.context.device.Name} (${this.accessory.context.device.Serial}) seems to be unreachable:`, error);
-      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      this.reachable = false;
+      this.platform.log.error(
+        `${this.accessory.context.device.Name} (${this.accessory.context.device.Serial}) seems to be unreachable:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Stops the background state refresh
+   */
+  stopPolling(): void {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
     }
   }
 

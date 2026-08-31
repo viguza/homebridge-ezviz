@@ -1,9 +1,11 @@
-import type { CharacteristicValue, PlatformAccessory } from 'homebridge';
+import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
 import type { EZVIZPlatform } from '../platform.js';
 import { EZVIZAPI } from '../api/ezviz-api.js';
 import { DefenceMode } from '../utils/enums.js';
 import { DEFAULT_GROUP_ID } from '../api/ezviz-constants.js';
+
+const STATE_REFRESH_INTERVAL_MS = 60_000;
 
 /**
  * Alarm Mode Switch accessory for EZVIZ
@@ -12,6 +14,10 @@ import { DEFAULT_GROUP_ID } from '../api/ezviz-constants.js';
  */
 export class AlarmModeSwitch {
   private api: EZVIZAPI;
+  private readonly alarmService: Service;
+  private currentState = false;
+  private reachable = true;
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     api: EZVIZAPI,
@@ -27,15 +33,19 @@ export class AlarmModeSwitch {
       .setCharacteristic(this.platform.Characteristic.SerialNumber, 'EZVIZ-AlarmMode');
     
     // Set up the switch service
-    const alarmService = this.accessory.getService(this.platform.Service.Switch) || 
+    this.alarmService = this.accessory.getService(this.platform.Service.Switch) || 
                        this.accessory.addService(this.platform.Service.Switch, 'Alarm Mode');
     
-    alarmService.setCharacteristic(this.platform.Characteristic.Name, 'Alarm Mode');
+    this.alarmService.setCharacteristic(this.platform.Characteristic.Name, 'Alarm Mode');
     
-    // Set up event handlers
-    alarmService.getCharacteristic(this.platform.Characteristic.On)
+    // Set up event handlers. The read answers from cached state so it never waits on
+    // the network — HomeKit abandons a read that takes longer than 9s.
+    this.alarmService.getCharacteristic(this.platform.Characteristic.On)
       .onSet(this.setAlarmMode.bind(this))
       .onGet(this.getAlarmMode.bind(this));
+
+    this.refreshState();
+    this.refreshTimer = setInterval(() => this.refreshState(), STATE_REFRESH_INTERVAL_MS);
   }
 
   /**
@@ -47,6 +57,8 @@ export class AlarmModeSwitch {
       // ON = AWAY_MODE (2) = fully armed, OFF = HOME_MODE (1) = disarmed
       const mode = value ? DefenceMode.AWAY_MODE : DefenceMode.HOME_MODE;
       await this.api.setDefenceMode(DEFAULT_GROUP_ID, mode);
+      this.currentState = mode === DefenceMode.AWAY_MODE;
+      this.reachable = true;
       this.platform.log.debug(`Successfully set alarm mode to ${value ? 'AWAY_MODE (armed)' : 'HOME_MODE (disarmed)'}`);
     } catch (error) {
       this.platform.log.error('Unable to set alarm mode:', error);
@@ -55,20 +67,45 @@ export class AlarmModeSwitch {
   }
 
   /**
-   * Gets the current alarm mode (defence mode) state
-   * @returns Promise resolving to the current state (true = armed, false = disarmed)
+   * Returns the last known alarm mode without blocking on the network.
+   * Reports a communication failure when the most recent refresh failed, rather than
+   * reporting the alarm as disarmed when its real state is unknown.
    */
-  async getAlarmMode(): Promise<CharacteristicValue> {
+  getAlarmMode(): CharacteristicValue {
+    if (!this.reachable) {
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+    return this.currentState;
+  }
+
+  /**
+   * Refreshes the cached defence mode in the background and pushes any change to HomeKit
+   */
+  private async refreshState(): Promise<void> {
     try {
       const mode = await this.api.getDefenceMode(DEFAULT_GROUP_ID);
-      // Return true if mode is AWAY_MODE (fully armed), false otherwise
+      // Switch is ON only when mode is AWAY_MODE (fully armed)
       const isArmed = mode === DefenceMode.AWAY_MODE;
-      this.platform.log.debug(`Current alarm mode: ${DefenceMode[mode]} (${mode}), switch is ${isArmed ? 'ON' : 'OFF'}`);
-      return isArmed;
+      this.reachable = true;
+
+      if (isArmed !== this.currentState) {
+        this.currentState = isArmed;
+        this.alarmService.updateCharacteristic(this.platform.Characteristic.On, isArmed);
+        this.platform.log.debug(`Current alarm mode: ${DefenceMode[mode]} (${mode}), switch is ${isArmed ? 'ON' : 'OFF'}`);
+      }
     } catch (error) {
+      this.reachable = false;
       this.platform.log.error('Unable to get alarm mode:', error);
-      // Return false (disarmed) as default on error
-      return false;
+    }
+  }
+
+  /**
+   * Stops the background state refresh
+   */
+  stopPolling(): void {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
     }
   }
 
@@ -80,4 +117,3 @@ export class AlarmModeSwitch {
     return this.accessory;
   }
 }
-
