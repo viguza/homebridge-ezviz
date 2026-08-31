@@ -22,7 +22,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
 
   public readonly accessories: Map<string, PlatformAccessory> = new Map();
   public readonly discoveredCacheUUIDs: string[] = [];
-  private readonly motionSensors: Map<string, MotionSensor> = new Map();
+  private readonly motionSensors: Map<string, MotionSensor[]> = new Map();
   private mqttClient: EzvizMqttClient | null = null;
 
   constructor(
@@ -143,7 +143,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
 
         this.discoveredCacheUUIDs.push(device.UUID);
 
-        if (device.Type === DeviceTypes.IPC || device.Type === DeviceTypes.CatEye) {
+        if (CAMERA_DEVICE_TYPES.has(device.Type as DeviceTypes)) {
           if ((device.HBConfig as CameraConfig | undefined)?.motionSensor) {
             this.createMotionSensor(ezvizAPI, device);
           }
@@ -201,23 +201,45 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   private createMotionSensor(ezvizAPI: EZVIZAPI, device: DeviceData) {
     const uuid = this.api.hap.uuid.generate(`${device.Serial}-motion`);
     const name = `${device.Name} Motion`;
+    // Dual cameras carry a channel-suffixed accessory serial (ABC123_1), but MQTT push
+    // and the alarm history both report the bare device serial, so events must be
+    // matched on that. The accessory UUID still uses the suffixed serial so existing
+    // accessories keep their identity.
+    const serial = device.DeviceInfo.deviceSerial;
     const existing = this.accessories.get(uuid);
     let sensor: MotionSensor;
 
     if (existing) {
       this.log.debug(`Restoring existing motion sensor from cache: ${existing.displayName}`);
-      existing.context.serial = device.Serial;
+      existing.context.serial = serial;
       sensor = new MotionSensor(ezvizAPI, this, existing);
     } else {
       this.log.info(`Adding new motion sensor: ${name}`);
       const accessory = new this.api.platformAccessory(name, uuid);
-      accessory.context.serial = device.Serial;
+      accessory.context.serial = serial;
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       sensor = new MotionSensor(ezvizAPI, this, accessory);
     }
 
-    this.motionSensors.set(device.Serial, sensor);
+    const sensors = this.motionSensors.get(serial) ?? [];
+    sensors.push(sensor);
+    this.motionSensors.set(serial, sensors);
     this.discoveredCacheUUIDs.push(uuid);
+  }
+
+  /**
+   * Routes an MQTT push alarm to every motion sensor registered for that device.
+   * A dual camera has one sensor per lens sharing a single device serial.
+   */
+  private handleMqttAlarm(serial: string): void {
+    const sensors = this.motionSensors.get(serial);
+    if (!sensors?.length) {
+      this.log.debug(`MQTT: no motion sensor for serial=${serial}, ignoring`);
+      return;
+    }
+    for (const sensor of sensors) {
+      sensor.onMqttAlarm();
+    }
   }
 
   private async startMqtt(ezvizAPI: EZVIZAPI): Promise<void> {
@@ -235,14 +257,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
         pushAddr,
         creds.sessionId,
         creds.username,
-        (serial) => {
-          const sensor = this.motionSensors.get(serial);
-          if (sensor) {
-            sensor.onMqttAlarm();
-          } else {
-            this.log.debug(`MQTT: no motion sensor for serial=${serial}, ignoring`);
-          }
-        },
+        (serial) => this.handleMqttAlarm(serial),
         this.log,
       );
       await this.mqttClient.connect();
