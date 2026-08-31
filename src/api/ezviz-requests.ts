@@ -2,7 +2,7 @@ import axios, { AxiosRequestConfig, Method, AxiosError } from 'axios';
 import querystring from 'querystring';
 import { Credentials, RefreshSession, RequestHeaders } from '../types/login.js';
 import { EZVIZConfig } from '../types/config.js';
-import { EZVIZ_CLIENT_TYPE, EZVIZ_USER_AGENT, API_ENDPOINT_REFRESH } from './ezviz-constants.js';
+import { EZVIZ_CLIENT_TYPE, EZVIZ_USER_AGENT, API_ENDPOINT_REFRESH, EZVIZ_REQUEST_TIMEOUT_MS } from './ezviz-constants.js';
 
 /**
  * Send a generic api request
@@ -37,6 +37,7 @@ export async function sendRequest<T>(
     data,
     headers,
     responseType: 'json',
+    timeout: EZVIZ_REQUEST_TIMEOUT_MS,
   };
 
   try {

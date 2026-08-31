@@ -2,7 +2,7 @@ import axios from 'axios';
 import { sendRequest } from '../../src/api/ezviz-requests';
 import { EZVIZConfig } from '../../src/types/config';
 import { Credentials } from '../../src/types/login';
-import { API_ENDPOINT_REFRESH } from '../../src/api/ezviz-constants';
+import { API_ENDPOINT_REFRESH, EZVIZ_REQUEST_TIMEOUT_MS } from '../../src/api/ezviz-constants';
 
 jest.mock('axios');
 
@@ -44,6 +44,7 @@ describe('sendRequest', () => {
       'method': 'GET',
       'responseType': 'json',
       'url': 'https://test.ezviz.com/v3/apigateway/login',
+      'timeout': EZVIZ_REQUEST_TIMEOUT_MS,
     }));
   });
 

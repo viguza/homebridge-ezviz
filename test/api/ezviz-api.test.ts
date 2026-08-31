@@ -5,7 +5,12 @@ import { EZVIZConfig } from '../../src/types/config';
 // import { Logging } from 'homebridge';
 import { Credentials } from '../../src/types/login';
 import { sendRequest } from '../../src/api/ezviz-requests';
-import { RUSSIA_AREA_ID, RUSSIA_DOMAIN } from '../../src/api/ezviz-constants';
+import {
+  RUSSIA_AREA_ID,
+  RUSSIA_DOMAIN,
+  DEVICE_LIST_CACHE_TTL_MS,
+  EZVIZ_REQUEST_TIMEOUT_MS,
+} from '../../src/api/ezviz-constants';
 
 jest.mock('axios');
 jest.mock('../../src/api/ezviz-requests', () => ({
@@ -404,6 +409,86 @@ describe('EZVIZAPI', () => {
         SWITCH: { '12345': [] },
       });
       await expect(ezvizApi.getSwitchState('12345', 14)).rejects.toThrow('Switch for device serial 12345 was not found');
+    });
+  });
+  describe('device list caching', () => {
+    const mockDevices = {
+      deviceInfos: [{ deviceSerial: '12345', status: 1 }],
+      SWITCH: { '12345': [{ type: 14, enable: true }] },
+    };
+
+    beforeEach(() => {
+      ezvizApi.sessionId = 'mockSessionId';
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockReset();
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValue(mockDevices);
+    });
+
+    test('should reuse the cached device list within the TTL', async () => {
+      await ezvizApi.listDevices();
+      await ezvizApi.listDevices();
+
+      expect(sendRequest).toHaveBeenCalledTimes(1);
+    });
+
+    test('should bypass the cache when forceRefresh is set', async () => {
+      await ezvizApi.listDevices();
+      await ezvizApi.listDevices(true);
+
+      expect(sendRequest).toHaveBeenCalledTimes(2);
+    });
+
+    test('should refetch once the cached entry has expired', async () => {
+      const nowSpy = jest.spyOn(Date, 'now');
+      nowSpy.mockReturnValue(0);
+      await ezvizApi.listDevices();
+
+      nowSpy.mockReturnValue(DEVICE_LIST_CACHE_TTL_MS + 1);
+      await ezvizApi.listDevices();
+
+      expect(sendRequest).toHaveBeenCalledTimes(2);
+      nowSpy.mockRestore();
+    });
+
+    test('should collapse concurrent reads into a single upstream request', async () => {
+      const [first, second, third] = await Promise.all([
+        ezvizApi.listDevices(),
+        ezvizApi.listDevices(),
+        ezvizApi.getSwitchState('12345', 14),
+      ]);
+
+      expect(sendRequest).toHaveBeenCalledTimes(1);
+      expect(first).toEqual(mockDevices);
+      expect(second).toEqual(mockDevices);
+      expect(third).toBe(true);
+    });
+
+    test('should not cache a failed request', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockRejectedValueOnce(new Error('Get devices failed'));
+      await expect(ezvizApi.listDevices()).rejects.toThrow('Get devices failed');
+
+      const devices = await ezvizApi.listDevices();
+      expect(devices).toEqual(mockDevices);
+      expect(sendRequest).toHaveBeenCalledTimes(2);
+    });
+
+    test('should invalidate the cache after a switch write', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: {} });
+      await ezvizApi.listDevices();
+      await ezvizApi.setSwitchState('12345', 14, true);
+      await ezvizApi.listDevices();
+
+      expect(sendRequest).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('request timeouts', () => {
+    test('should bound the authentication request', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { meta: { code: 200 } } });
+      await ezvizApi.authenticate();
+
+      expect(axios).toHaveBeenCalledWith(expect.objectContaining({
+        timeout: EZVIZ_REQUEST_TIMEOUT_MS,
+      }));
     });
   });
 });
