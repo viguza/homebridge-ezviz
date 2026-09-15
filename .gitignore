@@ -1,6 +1,9 @@
 # Ignore compiled code
 dist
 
+# Local Claude Code settings
+.claude
+
 # ------------- Defaults ------------- #
 .DS_Store
 
