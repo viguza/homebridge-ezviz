@@ -20,6 +20,10 @@ export const DEFAULT_GROUP_ID = -1;
 // Requests made on a HomeKit read path must fail fast: hap-nodejs warns after 3s
 // and abandons the read 6s later, so an unbounded request shows as "No Response".
 export const EZVIZ_REQUEST_TIMEOUT_MS = 5000;
+// Used by background polls (alarm mode / last-alarm-time refresh) that update cached
+// state rather than answer a live HomeKit read, so they can afford to wait longer and
+// retry once or twice when the EZVIZ cloud API is briefly slow.
+export const EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS = 10_000;
 // How long a fetched device list stays reusable, so simultaneous reads across
 // accessories collapse into a single upstream request.
 export const DEVICE_LIST_CACHE_TTL_MS = 30_000;
