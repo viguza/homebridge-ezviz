@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.8.3] - 2026-09-15
+
+### Fixed
+- Motion sensors never triggering for dual-lens cameras and battery cameras/doorbells (#30): both MQTT push and REST polling matched on the wrong device serial for dual-lens accessories, and sensor creation was gated on device types that excluded `BatteryCamera`/`BDoorBell`
+- Alarm mode and last-alarm-time background polls failing outright with `ECONNABORTED` timeouts against the EZVIZ cloud API, spamming logs with no recovery until the next poll tick
+
+### Changed
+- Alarm mode (`getDefenceMode`) and motion (`getLastAlarmTime`) background polls now use a longer 10 s timeout and retry up to twice with backoff on transient network/5xx errors, since they refresh cached state rather than answer a live HomeKit read
+
 ## [1.8.2] - 2026-08-31
 
 ### Fixed
