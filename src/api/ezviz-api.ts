@@ -22,10 +22,11 @@ import {
   RUSSIA_AREA_ID,
   DEFAULT_GROUP_ID,
   EZVIZ_REQUEST_TIMEOUT_MS,
+  EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS,
   DEVICE_LIST_CACHE_TTL_MS,
 } from './ezviz-constants.js';
 import { DefenceMode } from '../utils/enums.js';
-import { sendRequest } from './ezviz-requests.js';
+import { sendRequest, withNetworkRetry } from './ezviz-requests.js';
 
 /**
  * EZVIZ API client for interacting with EZVIZ services
@@ -236,6 +237,9 @@ export class EZVIZAPI {
         this.config.domain,
         EZVIZ_SERVER_INFO_ENDPOINT,
         'GET',
+        undefined,
+        3,
+        { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
       ) as Record<string, unknown>;
       const sysConfig = response?.systemConfigInfo as Record<string, unknown> | undefined;
       const pushAddr = (sysConfig?.pushAddr as string) ?? null;
@@ -353,6 +357,9 @@ export class EZVIZAPI {
         this.config.domain,
         `${EZVIZ_UNIFIEDMSG_ENDPOINT}?${query}`,
         'GET',
+        undefined,
+        3,
+        { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
       ) as { message?: Array<{ time?: number | string; deviceSerial?: string }>; messages?: Array<{ time?: number | string; deviceSerial?: string }> };
 
       const messages = response?.message ?? response?.messages ?? [];
@@ -553,7 +560,7 @@ export class EZVIZAPI {
 
     const config: AxiosRequestConfig = {
       method: 'get',
-      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
+      timeout: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS,
       url: `${this.config.domain}${EZVIZ_DEFENCE_MODE_GET_ENDPOINT}?${query}`,
       headers: {
         'sessionid': this.sessionId,
@@ -563,7 +570,7 @@ export class EZVIZAPI {
     };
 
     try {
-      const response = await axios(config);
+      const response = await withNetworkRetry(() => axios(config), 2);
 
       if (response.data?.retcode && response.data.retcode !== '200') {
         throw new Error(`Failed to get defence mode: ${response.data.retcode}`);
