@@ -14,6 +14,7 @@ export const CAMERA_DEVICE_TYPES = new Set([
 ]);
 
 export enum SwitchTypes {
+  Privacy = 7,
   On = 14,
   Sleep = 21,
   Audio = 22,
