@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.9.2] - 2026-09-16
+
+### Changed
+- No user-facing changes. Test coverage expanded significantly (54% → 76% statements, 42% → 73% branches, 54 → 118 tests): the defence mode API (`setDefenceMode`/`getDefenceMode`), the HomeKit↔EZVIZ mode mapping, MQTT payload parsing, `extractDevicesData`/`getServiceUrls`, and the `SmartPlug`/`SecuritySystemAccessory`/`MotionSensor` accessory classes themselves are now directly tested (#46, #47, #48)
+
 ## [1.9.1] - 2026-09-16
 
 ### Fixed
