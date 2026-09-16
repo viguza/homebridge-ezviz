@@ -14,10 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nothing yet
 
 ### Fixed
-- Security System "Off" (disarm) was sending EZVIZ's `UNSET_MODE`, which does not actually disarm the device — it shows as "Armado" in the EZVIZ app just like Away/Night. Only `HOME_MODE` behaves as "Desarmado" on real hardware, so Off (and Stay) now both map to it, since EZVIZ has no working fully-off mode of its own
+- Nothing yet
 
 ### Removed
 - Nothing yet
+
+## [1.9.1] - 2026-09-16
+
+### Fixed
+- Security System "Off" (disarm) was sending EZVIZ's `UNSET_MODE`, which does not actually disarm the device — it shows as "Armado" in the EZVIZ app just like Away/Night. Only `HOME_MODE` behaves as "Desarmado" on real hardware, so Off (and Stay) now both map to it, since EZVIZ has no working fully-off mode of its own (#45)
 
 ## [1.9.0] - 2026-09-16
 
