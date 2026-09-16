@@ -8,16 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Camera privacy toggle: cameras that report a privacy switch now expose a native HomeKit `CameraOperatingMode` "Camera Off" control on the existing camera accessory, mapped to EZVIZ's privacy switch. Devices without a privacy switch are unaffected
+- Nothing yet
 
 ### Changed
-- Alarm mode accessory now exposes a native HomeKit Security System (Stay/Away/Night/Off) instead of a plain on/off switch, enabling Home/Away automations and Apple Watch arm/disarm controls
+- Nothing yet
 
 ### Fixed
 - Nothing yet
 
 ### Removed
 - Nothing yet
+
+## [1.9.0] - 2026-09-16
+
+### Added
+- Camera privacy toggle: cameras that report a privacy switch now expose a native HomeKit `CameraOperatingMode` "Camera Off" control on the existing camera accessory, mapped to EZVIZ's privacy switch. Devices without a privacy switch are unaffected (#44)
+
+### Changed
+- Alarm mode accessory now exposes a native HomeKit Security System (Stay/Away/Night/Off) instead of a plain on/off switch, enabling Home/Away automations and Apple Watch arm/disarm controls (#43)
+  - **Note:** any existing Siri Shortcut, Home app automation, or scene referencing "Alarm Mode" as a switch will stop working after upgrading and needs to be recreated against the new Security System accessory
 
 ## [1.8.5] - 2026-09-16
 
