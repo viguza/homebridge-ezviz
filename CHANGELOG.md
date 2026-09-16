@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Nothing yet
+- Camera privacy toggle: cameras that report a privacy switch now expose a native HomeKit `CameraOperatingMode` "Camera Off" control on the existing camera accessory, mapped to EZVIZ's privacy switch. Devices without a privacy switch are unaffected
 
 ### Changed
 - Nothing yet
