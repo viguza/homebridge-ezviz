@@ -155,6 +155,37 @@ describe('EZVIZAPI', () => {
     });
   });
 
+  describe('getServiceUrls', () => {
+    test('should return the push address and store it on credentials', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        systemConfigInfo: { pushAddr: 'push.ezvizlife.com' },
+      });
+      const pushAddr = await ezvizApi.getServiceUrls();
+      expect(pushAddr).toBe('push.ezvizlife.com');
+      expect(mockConfig.credentials.pushAddr).toBe('push.ezvizlife.com');
+    });
+
+    test('should return null when pushAddr is absent from systemConfigInfo', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ systemConfigInfo: {} });
+      const pushAddr = await ezvizApi.getServiceUrls();
+      expect(pushAddr).toBeNull();
+      expect(mockConfig.credentials.pushAddr).toBeUndefined();
+    });
+
+    test('should return null when systemConfigInfo is absent', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({});
+      const pushAddr = await ezvizApi.getServiceUrls();
+      expect(pushAddr).toBeNull();
+    });
+
+    test('should return null and log a debug message instead of throwing on request failure', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockRejectedValueOnce(new Error('Network fail'));
+      const pushAddr = await ezvizApi.getServiceUrls();
+      expect(pushAddr).toBeNull();
+      expect(mockLog.debug).toHaveBeenCalledWith('Could not fetch service URLs:', expect.any(Error));
+    });
+  });
+
   describe('refreshSession', () => {
     beforeEach(() => {
       ezvizApi.sessionId = 'mockSessionId';
