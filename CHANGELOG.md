@@ -19,10 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
-## [1.8.4] - 2026-09-15
+## [1.8.5] - 2026-09-16
 
 ### Fixed
 - Resolved 18 npm audit vulnerabilities in the dependency tree (2 critical, 9 high, 3 moderate, 4 low), including unsafe boundary generation in `form-data` and arbitrary file write/symlink traversal in `tar`; transitive resolutions now within existing `package.json` semver ranges (`axios` resolves to 1.20.0)
+- Published package tarball no longer bundles local `.claude/settings.local.json`
+- CodeQL: `GITHUB_TOKEN` in the build workflow is now scoped to `contents: read`, since the job never writes anything
 
 ### Changed
 - `typescript-eslint` bumped to `^8.70.0` to support the newer `eslint` pulled in by the audit fix
