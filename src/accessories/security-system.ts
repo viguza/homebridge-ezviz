@@ -12,7 +12,7 @@ const STATE_REFRESH_INTERVAL_MS = 60_000;
  * HomeKit's SecuritySystemCurrentState/TargetState share the same numbering
  * for STAY_ARM/AWAY_ARM/NIGHT_ARM; DISARMED/DISARM only differ in value on Current vs Target.
  */
-function defenceModeToState(mode: DefenceMode): number {
+export function defenceModeToState(mode: DefenceMode): number {
   switch (mode) {
   case DefenceMode.HOME_MODE:
     return 0; // STAY_ARM
@@ -32,7 +32,7 @@ function defenceModeToState(mode: DefenceMode): number {
  * Since there is no working EZVIZ mode for "fully off", both STAY_ARM and DISARM map to
  * HOME_MODE — it's the only mode that actually disarms the device.
  */
-function targetStateToDefenceMode(state: CharacteristicValue): DefenceMode {
+export function targetStateToDefenceMode(state: CharacteristicValue): DefenceMode {
   switch (state) {
   case 1:
     return DefenceMode.AWAY_MODE;
