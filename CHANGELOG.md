@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nothing yet
 
 ### Changed
-- Nothing yet
+- Alarm mode accessory now exposes a native HomeKit Security System (Stay/Away/Night/Off) instead of a plain on/off switch, enabling Home/Away automations and Apple Watch arm/disarm controls
 
 ### Fixed
 - Nothing yet
