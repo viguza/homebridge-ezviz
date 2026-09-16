@@ -26,17 +26,22 @@ function defenceModeToState(mode: DefenceMode): number {
   }
 }
 
+/**
+ * On real hardware, EZVIZ only ever reports HOME_MODE as "Desarmado" (disarmed) — UNSET_MODE
+ * does not behave as disarmed and shows as "Armado" instead (confirmed against a live device).
+ * Since there is no working EZVIZ mode for "fully off", both STAY_ARM and DISARM map to
+ * HOME_MODE — it's the only mode that actually disarms the device.
+ */
 function targetStateToDefenceMode(state: CharacteristicValue): DefenceMode {
   switch (state) {
-  case 0:
-    return DefenceMode.HOME_MODE;
   case 1:
     return DefenceMode.AWAY_MODE;
   case 2:
     return DefenceMode.SLEEP_MODE;
-  case 3:
+  case 0: // STAY_ARM
+  case 3: // DISARM
   default:
-    return DefenceMode.UNSET_MODE;
+    return DefenceMode.HOME_MODE;
   }
 }
 
