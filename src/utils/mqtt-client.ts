@@ -20,6 +20,32 @@ const EXT_INT_FIELDS = new Set([
 
 export type MqttMessageCallback = (deviceSerial: string) => void;
 
+/**
+ * Decodes a raw EZVIZ MQTT payload. `ext` normally arrives as a comma-separated string
+ * whose fields are positional (see EXT_FIELD_NAMES) rather than a JSON object, so this
+ * expands it into a named, typed record.
+ */
+export function decodeMqttPayload(payload: Buffer): Record<string, unknown> {
+  const data = JSON.parse(payload.toString('utf-8')) as Record<string, unknown>;
+  if (typeof data.ext === 'string') {
+    const parts = data.ext.split(',');
+    const ext: Record<string, unknown> = {};
+    for (let i = 0; i < EXT_FIELD_NAMES.length; i++) {
+      const name = EXT_FIELD_NAMES[i];
+      let value: string | number | undefined = parts[i];
+      if (value !== undefined && EXT_INT_FIELDS.has(name)) {
+        const n = parseInt(value, 10);
+        if (!isNaN(n)) {
+          value = n;
+        }
+      }
+      ext[name] = value;
+    }
+    data.ext = ext;
+  }
+  return data;
+}
+
 export class EzvizMqttClient {
   private mqttClient: MqttClient | null = null;
   private clientId: string | null = null;
@@ -139,7 +165,7 @@ export class EzvizMqttClient {
     client.on('message', (topic, payload) => {
       this.log.debug(`MQTT raw message: topic=${topic} bytes=${payload.length}`);
       try {
-        const decoded = this.decodePayload(payload);
+        const decoded = decodeMqttPayload(payload);
         const ext = decoded.ext as Record<string, unknown>;
         const serial = ext?.device_serial as string;
         if (!serial) {
@@ -172,26 +198,5 @@ export class EzvizMqttClient {
     });
 
     this.mqttClient = client;
-  }
-
-  private decodePayload(payload: Buffer): Record<string, unknown> {
-    const data = JSON.parse(payload.toString('utf-8')) as Record<string, unknown>;
-    if (typeof data.ext === 'string') {
-      const parts = data.ext.split(',');
-      const ext: Record<string, unknown> = {};
-      for (let i = 0; i < EXT_FIELD_NAMES.length; i++) {
-        const name = EXT_FIELD_NAMES[i];
-        let value: string | number | undefined = parts[i];
-        if (value !== undefined && EXT_INT_FIELDS.has(name)) {
-          const n = parseInt(value, 10);
-          if (!isNaN(n)) {
-            value = n;
-          }
-        }
-        ext[name] = value;
-      }
-      data.ext = ext;
-    }
-    return data;
   }
 }

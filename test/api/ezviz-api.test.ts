@@ -5,6 +5,7 @@ import { EZVIZConfig } from '../../src/types/config';
 // import { Logging } from 'homebridge';
 import { Credentials } from '../../src/types/login';
 import { sendRequest } from '../../src/api/ezviz-requests';
+import { DefenceMode } from '../../src/utils/enums';
 import {
   RUSSIA_AREA_ID,
   RUSSIA_DOMAIN,
@@ -15,6 +16,9 @@ import {
 jest.mock('axios');
 jest.mock('../../src/api/ezviz-requests', () => ({
   sendRequest: jest.fn(),
+  // getDefenceMode calls this directly (not through sendRequest); a pass-through
+  // keeps its single-call behavior without exercising the real retry/backoff loop.
+  withNetworkRetry: jest.fn((fn: () => unknown) => fn()),
 }));
 
 describe('EZVIZAPI', () => {
@@ -411,6 +415,109 @@ describe('EZVIZAPI', () => {
       await expect(ezvizApi.getSwitchState('12345', 14)).rejects.toThrow('Switch for device serial 12345 was not found');
     });
   });
+
+  describe('setDefenceMode', () => {
+    beforeEach(() => {
+      ezvizApi.sessionId = 'mockSessionId';
+    });
+
+    test('should send request on success', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValue({ data: {} });
+      await ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE);
+      expect(axios).toHaveBeenCalled();
+    });
+
+    test('should throw error for an invalid defence mode value', async () => {
+      await expect(ezvizApi.setDefenceMode(1, 99 as DefenceMode)).rejects.toThrow('Invalid defence mode');
+    });
+
+    test('should log error and throw if authentication fails', async () => {
+      ezvizApi.sessionId = null;
+      jest.spyOn(ezvizApi, 'authenticate').mockRejectedValueOnce(new Error('Auth failed'));
+      await expect(ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE)).rejects.toThrow('Auth failed');
+      expect(mockLog.error).toHaveBeenCalledWith('Failed to authenticate before setting defence mode:', expect.any(Error));
+    });
+
+    test('should throw error if update fails with retcode', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { retcode: '999' } });
+      await expect(ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE)).rejects.toThrow('Defence mode update failed: 999');
+    });
+
+    test('should throw error if update fails with meta.code', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({
+        data: { meta: { code: 500, message: 'Server error' } },
+      });
+      await expect(ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE)).rejects.toThrow('Defence mode update failed: 500 - Server error');
+    });
+
+    test('should log error if request fails', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Network fail'));
+      await expect(ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE)).rejects.toThrow('Network fail');
+      expect(mockLog.error).toHaveBeenCalledWith('Error setting defence mode:', expect.any(Error));
+    });
+  });
+
+  describe('getDefenceMode', () => {
+    beforeEach(() => {
+      ezvizApi.sessionId = 'mockSessionId';
+    });
+
+    test('should return the mode from response.data.mode', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { mode: 2 } });
+      await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.AWAY_MODE);
+    });
+
+    test('should parse string mode values', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { mode: '1' } });
+      await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.HOME_MODE);
+    });
+
+    test('should fall back to response.data.defenceMode when mode is absent', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { defenceMode: 3 } });
+      await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.SLEEP_MODE);
+    });
+
+    test('should fall back to response.data.data.mode when top-level fields are absent', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { data: { mode: 0 } } });
+      await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.UNSET_MODE);
+    });
+
+    test('should default to UNSET_MODE when no mode is found in the response', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: {} });
+      await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.UNSET_MODE);
+    });
+
+    test('should default to UNSET_MODE for an unrecognized mode value', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { mode: 99 } });
+      await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.UNSET_MODE);
+    });
+
+    test('should throw error if response has retcode failure', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { retcode: '999' } });
+      await expect(ezvizApi.getDefenceMode(1)).rejects.toThrow('Failed to get defence mode: 999');
+    });
+
+    test('should throw error if response has meta.code failure', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({
+        data: { meta: { code: 500, message: 'Server error' } },
+      });
+      await expect(ezvizApi.getDefenceMode(1)).rejects.toThrow('Failed to get defence mode: 500 - Server error');
+    });
+
+    test('should log error and throw if authentication fails', async () => {
+      ezvizApi.sessionId = null;
+      jest.spyOn(ezvizApi, 'authenticate').mockRejectedValueOnce(new Error('Auth failed'));
+      await expect(ezvizApi.getDefenceMode(1)).rejects.toThrow('Auth failed');
+      expect(mockLog.error).toHaveBeenCalledWith('Failed to authenticate before getting defence mode:', expect.any(Error));
+    });
+
+    test('should log error and throw on request failure', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Network fail'));
+      await expect(ezvizApi.getDefenceMode(1)).rejects.toThrow('Network fail');
+      expect(mockLog.error).toHaveBeenCalledWith('Error getting defence mode:', expect.any(Error));
+    });
+  });
+
   describe('device list caching', () => {
     const mockDevices = {
       deviceInfos: [{ deviceSerial: '12345', status: 1 }],
