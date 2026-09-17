@@ -16,9 +16,6 @@ import {
 jest.mock('axios');
 jest.mock('../../src/api/ezviz-requests', () => ({
   sendRequest: jest.fn(),
-  // getDefenceMode calls this directly (not through sendRequest); a pass-through
-  // keeps its single-call behavior without exercising the real retry/backoff loop.
-  withNetworkRetry: jest.fn((fn: () => unknown) => fn()),
 }));
 
 describe('EZVIZAPI', () => {
@@ -493,44 +490,44 @@ describe('EZVIZAPI', () => {
       ezvizApi.sessionId = 'mockSessionId';
     });
 
-    test('should return the mode from response.data.mode', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { mode: 2 } });
+    test('should return the mode from response.mode', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ mode: 2 });
       await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.AWAY_MODE);
     });
 
     test('should parse string mode values', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { mode: '1' } });
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ mode: '1' });
       await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.HOME_MODE);
     });
 
-    test('should fall back to response.data.defenceMode when mode is absent', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { defenceMode: 3 } });
+    test('should fall back to response.defenceMode when mode is absent', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ defenceMode: 3 });
       await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.SLEEP_MODE);
     });
 
-    test('should fall back to response.data.data.mode when top-level fields are absent', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { data: { mode: 0 } } });
+    test('should fall back to response.data.mode when top-level fields are absent', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ data: { mode: 0 } });
       await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.UNSET_MODE);
     });
 
     test('should default to UNSET_MODE when no mode is found in the response', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: {} });
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({});
       await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.UNSET_MODE);
     });
 
     test('should default to UNSET_MODE for an unrecognized mode value', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { mode: 99 } });
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ mode: 99 });
       await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.UNSET_MODE);
     });
 
     test('should throw error if response has retcode failure', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { retcode: '999' } });
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ retcode: '999' });
       await expect(ezvizApi.getDefenceMode(1)).rejects.toThrow('Failed to get defence mode: 999');
     });
 
     test('should throw error if response has meta.code failure', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({
-        data: { meta: { code: 500, message: 'Server error' } },
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        meta: { code: 500, message: 'Server error' },
       });
       await expect(ezvizApi.getDefenceMode(1)).rejects.toThrow('Failed to get defence mode: 500 - Server error');
     });
@@ -543,7 +540,7 @@ describe('EZVIZAPI', () => {
     });
 
     test('should log error and throw on request failure', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Network fail'));
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockRejectedValueOnce(new Error('Network fail'));
       await expect(ezvizApi.getDefenceMode(1)).rejects.toThrow('Network fail');
       expect(mockLog.error).toHaveBeenCalledWith('Error getting defence mode:', expect.any(Error));
     });

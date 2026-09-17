@@ -26,7 +26,7 @@ import {
   DEVICE_LIST_CACHE_TTL_MS,
 } from './ezviz-constants.js';
 import { DefenceMode } from '../utils/enums.js';
-import { sendRequest, withNetworkRetry } from './ezviz-requests.js';
+import { sendRequest } from './ezviz-requests.js';
 
 /**
  * EZVIZ API client for interacting with EZVIZ services
@@ -312,6 +312,9 @@ export class EZVIZAPI {
         this.config.domain,
         `${EZVIZ_DEVICES_ENDPOINT}?${query}`,
         'GET',
+        undefined,
+        3,
+        { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
       ) as ListDevicesResponse;
       this.deviceListCache = { data: info, expiresAt: Date.now() + DEVICE_LIST_CACHE_TTL_MS };
       return info;
@@ -558,31 +561,36 @@ export class EZVIZAPI {
       groupId: groupId,
     });
 
-    const config: AxiosRequestConfig = {
-      method: 'get',
-      timeout: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS,
-      url: `${this.config.domain}${EZVIZ_DEFENCE_MODE_GET_ENDPOINT}?${query}`,
-      headers: {
-        'sessionid': this.sessionId,
-        'clienttype': EZVIZ_CLIENT_TYPE,
-        'user-agent': EZVIZ_USER_AGENT,
-      },
+    type DefenceModeResponse = {
+      retcode?: string;
+      meta?: { code?: number; message?: string };
+      mode?: number | string;
+      defenceMode?: number | string;
+      data?: { mode?: number | string };
     };
 
     try {
-      const response = await withNetworkRetry(() => axios(config), 2);
+      const response = await sendRequest(
+        this.config,
+        this.config.domain,
+        `${EZVIZ_DEFENCE_MODE_GET_ENDPOINT}?${query}`,
+        'GET',
+        undefined,
+        3,
+        { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
+      ) as DefenceModeResponse;
 
-      if (response.data?.retcode && response.data.retcode !== '200') {
-        throw new Error(`Failed to get defence mode: ${response.data.retcode}`);
+      if (response?.retcode && response.retcode !== '200') {
+        throw new Error(`Failed to get defence mode: ${response.retcode}`);
       }
 
-      if (response.data?.meta?.code && response.data.meta.code !== 200) {
-        throw new Error(`Failed to get defence mode: ${response.data.meta.code} - ${response.data.meta.message}`);
+      if (response?.meta?.code && response.meta.code !== 200) {
+        throw new Error(`Failed to get defence mode: ${response.meta.code} - ${response.meta.message}`);
       }
 
       // Extract the mode from the response
-      // The response structure may vary, but typically it's in response.data.mode or response.data.defenceMode
-      const mode = response.data?.mode || response.data?.defenceMode || response.data?.data?.mode;
+      // The response structure may vary, but typically it's in response.mode or response.defenceMode
+      const mode = response?.mode || response?.defenceMode || response?.data?.mode;
 
       if (mode === undefined || mode === null) {
         this.log?.debug('No mode found in response, defaulting to UNSET_MODE');
