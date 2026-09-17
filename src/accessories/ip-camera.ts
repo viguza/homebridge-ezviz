@@ -48,6 +48,12 @@ export class IPCamera {
       this.operatingModeService = existingOperatingModeService ||
         this.accessory.addService(this.platform.Service.CameraOperatingMode);
 
+      // EventSnapshotsActive is a required characteristic of this service (per HAP spec) but
+      // we don't support HKSV event snapshots — set it statically so the service is valid and
+      // the Home app actually renders the "Camera" toggle in the camera's settings sheet.
+      this.operatingModeService.setCharacteristic(this.platform.Characteristic.EventSnapshotsActive, true);
+      this.operatingModeService.setCharacteristic(this.platform.Characteristic.PeriodicSnapshotsActive, true);
+
       this.operatingModeService.getCharacteristic(this.platform.Characteristic.HomeKitCameraActive)
         .onSet(this.setCameraActive.bind(this))
         .onGet(this.getCameraActive.bind(this));
