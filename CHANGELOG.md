@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.9.4] - 2026-09-17
+
+### Fixed
+- The camera privacy toggle added in 1.9.0 never actually appeared in the Home app: `CameraOperatingMode` requires the `EventSnapshotsActive` characteristic per the HAP spec, but it was only added to the service and never given a value, so HomeKit silently declined to render the "Camera" control in the camera's settings sheet (#18)
+
 ## [1.9.3] - 2026-09-16
 
 ### Fixed
