@@ -10,7 +10,7 @@
   "homepage": "https://github.com/viguza/homebridge-ezviz#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/viguza/homebridge-ezviz.git"
+    "url": "git+https://github.com/viguza/homebridge-ezviz.git"
   },
   "bugs": {
     "url": "https://github.com/viguza/homebridge-ezviz/issues"
