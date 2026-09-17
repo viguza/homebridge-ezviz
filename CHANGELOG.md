@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [1.9.3] - 2026-09-16
+
+### Fixed
+- Background polls for the device list (smart-plug reachability, camera active-state refresh) and defence mode were still using the 5s HomeKit-read timeout instead of the 10s background timeout, causing spurious "seems to be unreachable" errors under normal API latency. `getDefenceMode` also now goes through the shared request helper, gaining automatic session-refresh-on-401 retry it previously lacked
+
 ## [1.9.2] - 2026-09-16
 
 ### Changed
