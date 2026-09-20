@@ -142,6 +142,9 @@ export class StreamingDelegate implements CameraStreamingDelegate {
   }
 
   handleSnapshotRequest(request: SnapshotRequest, callback: SnapshotRequestCallback): void {
+    const startedAt = Date.now();
+    this.log.debug(`Snapshot requested for ${this.deviceData.Name} (${request.width}x${request.height})`);
+
     const sleepSwitch = this.deviceData.Switches?.find((x) => x.type === SwitchTypes.Sleep);
     if (sleepSwitch?.enable) {
       this.getOfflineImage(callback);
@@ -150,6 +153,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
 
     this.getCachedAlarmSnapshot().then((cached) => {
       if (cached) {
+        this.log.debug(`Snapshot for ${this.deviceData.Name} served from alarm cache in ${Date.now() - startedAt}ms`);
         callback(undefined, cached);
         return;
       }
@@ -157,10 +161,11 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       const url = this.getRtspUrl();
       getSnapshot(url)
         .then((snapshot) => {
+          this.log.debug(`Snapshot for ${this.deviceData.Name} served from live grab in ${Date.now() - startedAt}ms`);
           callback(undefined, snapshot);
         })
         .catch((error) => {
-          this.log.error(`Error fetching snapshot for ${this.deviceData.Name}`);
+          this.log.error(`Error fetching snapshot for ${this.deviceData.Name} after ${Date.now() - startedAt}ms:`, error);
           callback(error);
         });
     });

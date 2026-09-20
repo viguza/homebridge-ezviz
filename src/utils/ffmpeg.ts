@@ -40,10 +40,15 @@ export async function isFfmpegInstalled(ffmpegPath: string): Promise<boolean> {
   }
 }
 
+// HomeKit abandons a snapshot request that takes too long and retries it, so an
+// unbounded ffmpeg grab (e.g. a flaky RTSP connection that hangs) can leave a stale
+// attempt to eventually resolve alongside a fresher retry, delivering the image twice.
+const SNAPSHOT_TIMEOUT_MS = 8_000;
+
 export async function getSnapshot(url: string, customFfmpeg?: string): Promise<Buffer> {
   const command = ['-i', url, '-vframes', '1', '-f', 'mjpeg', '-'];
   const videoProcessor = customFfmpeg || pathToFfmpeg as unknown as string || 'ffmpeg';
-  const ff = await execa(videoProcessor, command, { env: process.env, encoding: null });
+  const ff = await execa(videoProcessor, command, { env: process.env, encoding: null, timeout: SNAPSHOT_TIMEOUT_MS });
   return ff.stdout;
 }
 
