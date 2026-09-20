@@ -257,13 +257,13 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     let command = [
       '-rtsp_transport', 'tcp',
       // ffmpeg's defaults (5s analyzeduration, multi-MB probesize) spend real time
-      // analyzing the input before producing any output — unnecessary here since we're
-      // remuxing (-c:v copy), not decoding, and already know it's H264 RTSP. This is the
-      // main fixable contributor to live view's multi-second startup delay.
-      '-fflags', 'nobuffer',
-      '-flags', 'low_delay',
-      '-probesize', '32',
-      '-analyzeduration', '0',
+      // analyzing the input before producing any output, which is unnecessary for a
+      // remux (-c:v copy) of an already-known H264 RTSP source. Trimmed, not zeroed —
+      // an earlier attempt at -probesize 32 -analyzeduration 0 was too aggressive for a
+      // live network source and broke stream start entirely rather than just speeding
+      // it up. This is still a large reduction from the 5s/multi-MB defaults.
+      '-probesize', '32768',
+      '-analyzeduration', '500000',
       '-use_wallclock_as_timestamps', '1',
       '-i', getRtspUrl(this.deviceData),
       '-map', '0:0',
