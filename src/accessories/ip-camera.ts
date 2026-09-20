@@ -23,7 +23,7 @@ const HKSV_PREBUFFER_LENGTH_MS = 4000;
 export class IPCamera {
   private api: EZVIZAPI;
   private deviceSerial: string;
-  private readonly operatingModeService: Service | null = null;
+  private operatingModeService: Service | null = null;
   private readonly streamingDelegate: StreamingDelegate;
   private readonly motionService: Service;
   private cameraController?: CameraController;
@@ -45,18 +45,29 @@ export class IPCamera {
       .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.DeviceInfo.deviceSubCategory)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.deviceSerial);
 
-    // Privacy toggle, surfaced as HomeKit's native "Camera Off" control instead of a
-    // separate switch accessory. HomeKitCameraActive=true means the camera is active
-    // (EZVIZ privacy mode disabled); false means EZVIZ privacy mode is enabled.
-    // Not every EZVIZ model exposes a privacy switch, so only wire this up — and only
-    // poll for it — when the device's own switch list actually reports one.
+    // Not every EZVIZ model exposes a privacy switch, so only wire up the toggle below —
+    // and only poll for it — when the device's own switch list actually reports one.
     const supportsPrivacySwitch = accessory.context.device.Switches
       ?.some((s: { type: number }) => s.type === SwitchTypes.Privacy) ?? false;
+    const hksvEnabled = Boolean(this.platform.config.enableHksv);
 
+    // CameraOperatingMode is also created internally by HAP-NodeJS's RecordingManagement
+    // whenever `recording` options are supplied below — it's the one service here that
+    // isn't exclusively ours, so a stale instance from a previous run (e.g. HKSV just got
+    // toggled on/off) can't safely be reused: drop any existing one and let whichever path
+    // owns it this run — RecordingManagement for HKSV, or us for privacy-only — create it
+    // fresh. Without this, a leftover manually-created instance collides with the one
+    // RecordingManagement creates as soon as HKSV is turned on.
     const existingOperatingModeService = this.accessory.getService(this.platform.Service.CameraOperatingMode);
-    if (supportsPrivacySwitch) {
-      this.operatingModeService = existingOperatingModeService ||
-        this.accessory.addService(this.platform.Service.CameraOperatingMode);
+    if (existingOperatingModeService) {
+      this.accessory.removeService(existingOperatingModeService);
+    }
+
+    if (!hksvEnabled && supportsPrivacySwitch) {
+      // Privacy toggle, surfaced as HomeKit's native "Camera Off" control instead of a
+      // separate switch accessory. HomeKitCameraActive=true means the camera is active
+      // (EZVIZ privacy mode disabled); false means EZVIZ privacy mode is enabled.
+      this.operatingModeService = this.accessory.addService(this.platform.Service.CameraOperatingMode);
 
       // EventSnapshotsActive/PeriodicSnapshotsActive are required characteristics of this
       // service per the HAP spec — set statically so the service is valid and the Home app
@@ -64,15 +75,7 @@ export class IPCamera {
       this.operatingModeService.setCharacteristic(this.platform.Characteristic.EventSnapshotsActive, true);
       this.operatingModeService.setCharacteristic(this.platform.Characteristic.PeriodicSnapshotsActive, true);
 
-      this.operatingModeService.getCharacteristic(this.platform.Characteristic.HomeKitCameraActive)
-        .onSet(this.setCameraActive.bind(this))
-        .onGet(this.getCameraActive.bind(this));
-
-      this.refreshCameraActiveState();
-      this.refreshTimer = setInterval(() => this.refreshCameraActiveState(), STATE_REFRESH_INTERVAL_MS);
-    } else if (existingOperatingModeService) {
-      // Device no longer reports the switch (e.g. after a firmware change) — drop the stale service.
-      this.accessory.removeService(existingOperatingModeService);
+      this.wirePrivacyToggle(this.operatingModeService);
     }
 
     // Create streaming delegate
@@ -92,7 +95,6 @@ export class IPCamera {
     this.motionService = this.accessory.getService(this.platform.Service.MotionSensor) ||
       this.accessory.addService(this.platform.Service.MotionSensor);
 
-    const hksvEnabled = Boolean(this.platform.config.enableHksv);
     const rtspUrl = getRtspUrl(accessory.context.device);
 
     // Configure camera controller options
@@ -181,11 +183,34 @@ export class IPCamera {
 
       accessory.configureController(cameraController);
 
+      // With HKSV enabled, RecordingManagement (above) owns CameraOperatingMode instead
+      // of us — wire the privacy toggle onto its instance rather than creating our own.
+      if (hksvEnabled) {
+        this.operatingModeService = cameraController.recordingManagement!.operatingModeService;
+        if (supportsPrivacySwitch) {
+          this.wirePrivacyToggle(this.operatingModeService);
+        }
+      }
+
       this.platform.log.debug(`Successfully configured camera: ${accessory.context.device.Name}`);
     } catch (error) {
       this.platform.log.error(`Error configuring camera ${accessory.context.device.Name}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Wires the privacy on/off handlers and background refresh onto a CameraOperatingMode
+   * service — either one we created ourselves (no HKSV) or the one RecordingManagement
+   * owns (HKSV enabled). Only called when the device actually reports a privacy switch.
+   */
+  private wirePrivacyToggle(service: Service): void {
+    service.getCharacteristic(this.platform.Characteristic.HomeKitCameraActive)
+      .onSet(this.setCameraActive.bind(this))
+      .onGet(this.getCameraActive.bind(this));
+
+    this.refreshCameraActiveState();
+    this.refreshTimer = setInterval(() => this.refreshCameraActiveState(), STATE_REFRESH_INTERVAL_MS);
   }
 
   /**
