@@ -1,6 +1,18 @@
 // The camera accessory pulls in the streaming delegate, which depends on the
 // ESM-only `get-port`. Stubbing it keeps this suite to the platform's routing logic.
-jest.mock('../../src/accessories/ip-camera', () => ({ IPCamera: class {} }));
+// The fake still implements attachMotionService (real IPCamera's linking entry point)
+// so CameraMotionSensor has a service to drive, matching production wiring.
+jest.mock('../../src/accessories/ip-camera', () => ({
+  IPCamera: class {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor(private ezvizAPI: unknown, private platform: any, private accessory: any) {}
+
+    attachMotionService() {
+      return this.accessory.getService(this.platform.Service.MotionSensor) ||
+        this.accessory.addService(this.platform.Service.MotionSensor);
+    }
+  },
+}));
 jest.mock('../../src/utils/mqtt-client', () => ({ EzvizMqttClient: class {} }));
 
 import type { API, Logging } from 'homebridge';
@@ -14,6 +26,11 @@ import { CAMERA_DEVICE_TYPES, DeviceTypes } from '../../src/utils/enums';
  * Motion events arrive keyed by the bare device serial, while a dual camera's
  * accessories carry a channel-suffixed serial. These tests pin the mapping between
  * the two so a suffixed serial can never again swallow every motion event.
+ *
+ * As of the linked-service change, the motion service lives on the camera's own
+ * accessory rather than a separate one — CameraMotionSensor sets the service's Name
+ * characteristic to distinguish it (e.g. "Front Door - Camera 1 Motion"), so the fake
+ * service tracks that characteristic instead of using the accessory's own displayName.
  */
 
 type Pushed = [string, string, unknown];
@@ -22,19 +39,26 @@ function buildHarness() {
   const pushed: Pushed[] = [];
   const registered: string[] = [];
 
-  const makeService = (name: string) => ({
-    setCharacteristic() {
-      return this;
-    },
-    getCharacteristic() {
-      return { onGet() {
-        return this;
-      } };
-    },
-    updateCharacteristic(characteristic: string, value: unknown) {
-      pushed.push([name, characteristic, value]);
-    },
-  });
+  const makeService = (initialName: string) => {
+    const service = {
+      displayName: initialName,
+      setCharacteristic(characteristic: string, value: unknown) {
+        if (characteristic === 'N') {
+          service.displayName = value as string;
+        }
+        return service;
+      },
+      getCharacteristic() {
+        return { onGet() {
+          return this;
+        } };
+      },
+      updateCharacteristic(characteristic: string, value: unknown) {
+        pushed.push([service.displayName, characteristic, value]);
+      },
+    };
+    return service;
+  };
 
   class FakeAccessory {
     displayName: string;
@@ -97,20 +121,26 @@ const deviceListResponse = {
   resourceInfos: [],
 } as unknown as ListDevicesResponse;
 
+// Mirrors platform.ts's discoverDevices loop: create the camera accessory first (as
+// IPCamera, mocked above), then attach a linked motion sensor onto it.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createSensors(platform: any) {
   const ezvizApi = { getLatestAlarm: jest.fn().mockResolvedValue(null) } as unknown as EZVIZAPI;
   const devices = platform.extractDevicesData(deviceListResponse);
   for (const device of devices) {
+    const accessory = new platform.api.platformAccessory(device.Name, device.UUID);
+    accessory.context.device = device;
+    platform.api.registerPlatformAccessories('plugin', 'platform', [accessory]);
+    const camera = platform.createAccessory(ezvizApi, accessory, device.Type);
     if (CAMERA_DEVICE_TYPES.has(device.Type as DeviceTypes) && device.HBConfig?.motionSensor) {
-      platform.createMotionSensor(ezvizApi, device);
+      platform.createCameraMotionSensor(ezvizApi, device, camera);
     }
   }
   return devices;
 }
 
 describe('motion sensor event routing', () => {
-  // MotionSensor schedules a poll interval and a motion auto-clear timeout; fake
+  // CameraMotionSensor schedules a poll interval and a motion auto-clear timeout; fake
   // timers keep those from holding the test process open.
   beforeEach(() => {
     jest.useFakeTimers();
@@ -153,10 +183,12 @@ describe('motion sensor event routing', () => {
     ]);
   });
 
-  test('battery cameras get a motion sensor and receive alarms', () => {
+  test('battery cameras get a linked motion service and receive alarms', () => {
     const { platform, pushed, registered } = buildHarness();
     createSensors(platform);
-    expect(registered).toContain('Driveway Motion');
+    // Only the camera accessory itself is registered — motion no longer gets its own.
+    expect(registered).toContain('Driveway');
+    expect(registered).not.toContain('Driveway Motion');
 
     pushed.length = 0;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -173,7 +205,7 @@ describe('motion sensor event routing', () => {
     const serials = [...(platform as any).motionSensors.values()]
       .flat()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((sensor: any) => sensor.accessory.context.serial);
+      .map((sensor: any) => sensor.serial);
     expect(serials).toEqual(['DUAL001', 'DUAL001', 'BATT001']);
   });
 

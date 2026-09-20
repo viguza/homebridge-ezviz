@@ -1,4 +1,4 @@
-import type { PlatformAccessory, Service } from 'homebridge';
+import type { Service } from 'homebridge';
 
 import type { EZVIZPlatform } from '../platform.js';
 import { EZVIZAPI } from '../api/ezviz-api.js';
@@ -6,8 +6,13 @@ import { EZVIZAPI } from '../api/ezviz-api.js';
 const POLL_INTERVAL_MS = 30_000;
 const MOTION_WINDOW_MS = 60_000;
 
-export class MotionSensor {
-  private readonly service: Service;
+/**
+ * Drives a HomeKit Motion Sensor service via MQTT push / REST poll. This does not own an
+ * accessory — the service is created by IPCamera and linked to the camera's primary
+ * service, so Home can associate a motion notification with that specific camera and
+ * offer a live preview. See IPCamera.attachMotionService.
+ */
+export class CameraMotionSensor {
   private motionDetected = false;
   private lastSeenAlarmTime: number | null | undefined = undefined;
   private clearTimer: ReturnType<typeof setTimeout> | null = null;
@@ -17,17 +22,11 @@ export class MotionSensor {
   constructor(
     private readonly api: EZVIZAPI,
     private readonly platform: EZVIZPlatform,
-    private readonly accessory: PlatformAccessory,
+    private readonly service: Service,
+    private readonly serial: string,
+    private readonly displayName: string,
   ) {
-    this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'EZVIZ')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Motion Sensor')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.serial);
-
-    this.service = this.accessory.getService(this.platform.Service.MotionSensor) ||
-      this.accessory.addService(this.platform.Service.MotionSensor);
-
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.displayName);
+    this.service.setCharacteristic(this.platform.Characteristic.Name, `${displayName} Motion`);
 
     this.service.getCharacteristic(this.platform.Characteristic.MotionDetected)
       .onGet(() => this.motionDetected);
@@ -46,12 +45,8 @@ export class MotionSensor {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
-      this.platform.log.debug(`${this.accessory.displayName}: polling stopped`);
+      this.platform.log.debug(`${this.displayName}: polling stopped`);
     }
-  }
-
-  private get serial(): string {
-    return this.accessory.context.serial;
   }
 
   private triggerMotion(): void {
@@ -64,7 +59,7 @@ export class MotionSensor {
     if (!this.motionDetected) {
       this.motionDetected = true;
       this.service.updateCharacteristic(this.platform.Characteristic.MotionDetected, true);
-      this.platform.log.info(`${this.accessory.displayName}: motion detected${this.usingMqtt ? ' (MQTT)' : ''}`);
+      this.platform.log.info(`${this.displayName}: motion detected${this.usingMqtt ? ' (MQTT)' : ''}`);
     }
   }
 
@@ -75,7 +70,7 @@ export class MotionSensor {
     }
     this.motionDetected = false;
     this.service.updateCharacteristic(this.platform.Characteristic.MotionDetected, false);
-    this.platform.log.debug(`${this.accessory.displayName}: motion cleared`);
+    this.platform.log.debug(`${this.displayName}: motion cleared`);
   }
 
   // Poll uses change detection: trigger when the REST API alarm timestamp changes,
@@ -93,17 +88,17 @@ export class MotionSensor {
 
       if (this.lastSeenAlarmTime === undefined) {
         this.lastSeenAlarmTime = alarm.time;
-        this.platform.log.debug(`${this.accessory.displayName}: initialised alarmTime=${alarm.time}`);
+        this.platform.log.debug(`${this.displayName}: initialised alarmTime=${alarm.time}`);
         return;
       }
 
       if (alarm.time !== this.lastSeenAlarmTime) {
-        this.platform.log.debug(`${this.accessory.displayName}: new alarm via poll (${this.lastSeenAlarmTime} → ${alarm.time})`);
+        this.platform.log.debug(`${this.displayName}: new alarm via poll (${this.lastSeenAlarmTime} → ${alarm.time})`);
         this.lastSeenAlarmTime = alarm.time;
         this.triggerMotion();
       }
     } catch (error) {
-      this.platform.log.error(`${this.accessory.displayName}: motion poll failed:`, error);
+      this.platform.log.error(`${this.displayName}: motion poll failed:`, error);
     }
   }
 }

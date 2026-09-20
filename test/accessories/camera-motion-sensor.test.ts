@@ -1,23 +1,26 @@
 import type { EZVIZAPI } from '../../src/api/ezviz-api';
 import type { EZVIZPlatform } from '../../src/platform';
-import { MotionSensor } from '../../src/accessories/motion-sensor';
-import { FakeAccessory, makeFakePlatform } from '../test-utils/fake-hap';
+import { CameraMotionSensor } from '../../src/accessories/camera-motion-sensor';
+import { makeFakeService, makeFakePlatform } from '../test-utils/fake-hap';
 
 /**
- * MotionSensor polls the EZVIZ alarm history and triggers on a changed timestamp, with
+ * CameraMotionSensor polls the EZVIZ alarm history and triggers on a changed timestamp, with
  * MQTT able to trigger it immediately regardless of poll timing. Both paths share a single
  * auto-clear timer. These tests drive poll()/onMqttAlarm() and the timers directly.
+ *
+ * CameraMotionSensor no longer owns an accessory — it drives a Service handed to it by IPCamera
+ * (which links it to the camera's primary service; see IPCamera.attachMotionService), so
+ * the harness passes a bare fake Service plus the serial/display name IPCamera would.
  */
 function buildHarness(getLatestAlarm = jest.fn().mockResolvedValue(null)) {
   const platform = makeFakePlatform();
-  const accessory = new FakeAccessory('Front Door Motion');
-  accessory.context.serial = 'CAM001';
+  const service = makeFakeService('Motion');
   const api = { getLatestAlarm } as unknown as EZVIZAPI;
 
-  return { platform, accessory, api, getLatestAlarm };
+  return { platform, service, api, getLatestAlarm };
 }
 
-describe('MotionSensor', () => {
+describe('CameraMotionSensor', () => {
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -28,11 +31,10 @@ describe('MotionSensor', () => {
   });
 
   test('the first poll only establishes a baseline and does not trigger motion', async () => {
-    const { platform, accessory, api } = buildHarness(jest.fn().mockResolvedValue({ time: 1000, picUrl: '' }));
-    const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
+    const { platform, service, api } = buildHarness(jest.fn().mockResolvedValue({ time: 1000, picUrl: '' }));
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
     await Promise.resolve();
 
-    const service = accessory.getService(platform.Service.MotionSensor)!;
     expect(service.getCharacteristic(platform.Characteristic.MotionDetected).onGetHandler!()).toBe(false);
     expect(service.updates).toHaveLength(0);
 
@@ -43,14 +45,13 @@ describe('MotionSensor', () => {
     const getLatestAlarm = jest.fn()
       .mockResolvedValueOnce({ time: 1000, picUrl: '' })
       .mockResolvedValueOnce({ time: 2000, picUrl: 'https://example.com/pic.jpg' });
-    const { platform, accessory, api } = buildHarness(getLatestAlarm);
-    const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
+    const { platform, service, api } = buildHarness(getLatestAlarm);
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
     await Promise.resolve();
 
     jest.advanceTimersByTime(30_000);
     await Promise.resolve();
 
-    const service = accessory.getService(platform.Service.MotionSensor)!;
     expect(service.getCharacteristic(platform.Characteristic.MotionDetected).onGetHandler!()).toBe(true);
     expect(service.updates).toContainEqual(['MotionDetected', true]);
     expect(platform.updateAlarmSnapshot).toHaveBeenCalledWith('CAM001', 'https://example.com/pic.jpg');
@@ -59,11 +60,10 @@ describe('MotionSensor', () => {
   });
 
   test('motion auto-clears after the motion window elapses', async () => {
-    const { platform, accessory, api } = buildHarness();
-    const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
+    const { platform, service, api } = buildHarness();
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
     sensor.onMqttAlarm();
 
-    const service = accessory.getService(platform.Service.MotionSensor)!;
     expect(service.getCharacteristic(platform.Characteristic.MotionDetected).onGetHandler!()).toBe(true);
 
     jest.advanceTimersByTime(60_000);
@@ -75,8 +75,8 @@ describe('MotionSensor', () => {
   });
 
   test('onMqttAlarm triggers immediately and logs the MQTT source', () => {
-    const { platform, accessory, api } = buildHarness();
-    const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
+    const { platform, service, api } = buildHarness();
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
 
     sensor.onMqttAlarm();
 
@@ -85,9 +85,8 @@ describe('MotionSensor', () => {
   });
 
   test('retriggering while already active resets the clear timer without a duplicate update', () => {
-    const { platform, accessory, api } = buildHarness();
-    const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
-    const service = accessory.getService(platform.Service.MotionSensor)!;
+    const { platform, service, api } = buildHarness();
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
 
     sensor.onMqttAlarm();
     expect(service.updates.filter(([, value]) => value === true)).toHaveLength(1);
@@ -103,8 +102,8 @@ describe('MotionSensor', () => {
   });
 
   test('a poll failure is logged, not thrown', async () => {
-    const { platform, accessory, api } = buildHarness(jest.fn().mockRejectedValue(new Error('network down')));
-    const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
+    const { platform, service, api } = buildHarness(jest.fn().mockRejectedValue(new Error('network down')));
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
     await Promise.resolve();
 
     expect(platform.log.error).toHaveBeenCalledWith(
@@ -116,8 +115,8 @@ describe('MotionSensor', () => {
   });
 
   test('stopPolling stops further polling', async () => {
-    const { getLatestAlarm, platform, accessory, api } = buildHarness();
-    const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
+    const { getLatestAlarm, platform, service, api } = buildHarness();
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
     await Promise.resolve();
     expect(getLatestAlarm).toHaveBeenCalledTimes(1);
 

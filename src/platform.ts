@@ -2,7 +2,7 @@ import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAcces
 import { SmartPlug } from './accessories/smart-plug.js';
 import { IPCamera } from './accessories/ip-camera.js';
 import { SecuritySystemAccessory } from './accessories/security-system.js';
-import { MotionSensor } from './accessories/motion-sensor.js';
+import { CameraMotionSensor } from './accessories/camera-motion-sensor.js';
 import { EzvizMqttClient } from './utils/mqtt-client.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { EZVIZAPI } from './api/ezviz-api.js';
@@ -22,7 +22,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
 
   public readonly accessories: Map<string, PlatformAccessory> = new Map();
   public readonly discoveredCacheUUIDs: string[] = [];
-  private readonly motionSensors: Map<string, MotionSensor[]> = new Map();
+  private readonly motionSensors: Map<string, CameraMotionSensor[]> = new Map();
   private mqttClient: EzvizMqttClient | null = null;
   private ezvizAPI: EZVIZAPI | null = null;
   // Latest alarm snapshot URL per device serial, used as a fast path for HomeKit
@@ -134,24 +134,25 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       
       for (const device of devices) {
         const existingAccessory = this.accessories.get(device.UUID);
+        let created: SmartPlug | IPCamera | undefined;
         if (existingAccessory) {
           this.log.debug(`Restoring existing ${device.Type} from cache: ${existingAccessory.displayName}`);
           existingAccessory.context.device = device;
-          this.createAccessory(ezvizAPI, existingAccessory, device.Type);
+          created = this.createAccessory(ezvizAPI, existingAccessory, device.Type);
         } else {
           this.log.info(`Adding new ${device.Type}: ${device.Name}`);
           const accessory = new this.api.platformAccessory(device.Name, device.UUID);
           accessory.context.device = device;
           this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-          this.createAccessory(ezvizAPI, accessory, device.Type);
+          created = this.createAccessory(ezvizAPI, accessory, device.Type);
         }
 
         this.discoveredCacheUUIDs.push(device.UUID);
 
-        if (CAMERA_DEVICE_TYPES.has(device.Type as DeviceTypes)) {
-          if ((device.HBConfig as CameraConfig | undefined)?.motionSensor) {
-            this.createMotionSensor(ezvizAPI, device);
-          }
+        if (CAMERA_DEVICE_TYPES.has(device.Type as DeviceTypes) &&
+            (device.HBConfig as CameraConfig | undefined)?.motionSensor &&
+            created instanceof IPCamera) {
+          this.createCameraMotionSensor(ezvizAPI, device, created);
         }
       }
 
@@ -188,48 +189,42 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
    * @param ezvizAPI - The EZVIZ API instance
    * @param accessory - The platform accessory
    * @param deviceType - The type of device
+   * @returns The created accessory wrapper, or undefined if the type is unsupported
    */
-  private createAccessory(ezvizAPI: EZVIZAPI, accessory: PlatformAccessory, deviceType: string) {
+  private createAccessory(ezvizAPI: EZVIZAPI, accessory: PlatformAccessory, deviceType: string): SmartPlug | IPCamera | undefined {
     try {
       if (deviceType === DeviceTypes.Socket) {
-        new SmartPlug(ezvizAPI, this, accessory);
+        return new SmartPlug(ezvizAPI, this, accessory);
       } else if (CAMERA_DEVICE_TYPES.has(deviceType as DeviceTypes)) {
-        new IPCamera(ezvizAPI, this, accessory);
+        return new IPCamera(ezvizAPI, this, accessory);
       } else {
         this.log.warn(`Unsupported device type: ${deviceType}`);
+        return undefined;
       }
     } catch (error) {
       this.log.error(`Error creating accessory for ${accessory.displayName}:`, error);
+      return undefined;
     }
   }
 
-  private createMotionSensor(ezvizAPI: EZVIZAPI, device: DeviceData) {
-    const uuid = this.api.hap.uuid.generate(`${device.Serial}-motion`);
-    const name = `${device.Name} Motion`;
+  /**
+   * Attaches a Motion Sensor service to the camera's own accessory, linked to its primary
+   * service — see IPCamera.attachMotionService. As of 1.10, this replaces the previous
+   * design of a separate "X Motion" accessory: existing installs will see that standalone
+   * accessory disappear and motion reappear as part of the camera accessory, which means
+   * any room assignment or automation built on the old accessory must be redone.
+   */
+  private createCameraMotionSensor(ezvizAPI: EZVIZAPI, device: DeviceData, camera: IPCamera) {
     // Dual cameras carry a channel-suffixed accessory serial (ABC123_1), but MQTT push
     // and the alarm history both report the bare device serial, so events must be
-    // matched on that. The accessory UUID still uses the suffixed serial so existing
-    // accessories keep their identity.
+    // matched on that.
     const serial = device.DeviceInfo.deviceSerial;
-    const existing = this.accessories.get(uuid);
-    let sensor: MotionSensor;
-
-    if (existing) {
-      this.log.debug(`Restoring existing motion sensor from cache: ${existing.displayName}`);
-      existing.context.serial = serial;
-      sensor = new MotionSensor(ezvizAPI, this, existing);
-    } else {
-      this.log.info(`Adding new motion sensor: ${name}`);
-      const accessory = new this.api.platformAccessory(name, uuid);
-      accessory.context.serial = serial;
-      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      sensor = new MotionSensor(ezvizAPI, this, accessory);
-    }
+    const service = camera.attachMotionService();
+    const sensor = new CameraMotionSensor(ezvizAPI, this, service, serial, device.Name);
 
     const sensors = this.motionSensors.get(serial) ?? [];
     sensors.push(sensor);
     this.motionSensors.set(serial, sensors);
-    this.discoveredCacheUUIDs.push(uuid);
   }
 
   /**
@@ -270,7 +265,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
 
   /**
    * Records the latest alarm snapshot URL for a device (called from the MQTT push
-   * handler and from MotionSensor's REST poll fallback).
+   * handler and from CameraMotionSensor's REST poll fallback).
    */
   updateAlarmSnapshot(serial: string, url: string): void {
     this.alarmSnapshots.set(serial, { url, fetchedAt: Date.now() });

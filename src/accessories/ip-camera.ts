@@ -17,6 +17,7 @@ export class IPCamera {
   private api: EZVIZAPI;
   private deviceSerial: string;
   private readonly operatingModeService: Service | null = null;
+  private readonly streamingDelegate: StreamingDelegate;
   private cameraActive = true;
   private reachable = true;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -72,6 +73,7 @@ export class IPCamera {
       this.platform.log,
       (serial) => this.platform.getAlarmSnapshot(serial),
     );
+    this.streamingDelegate = streamingDelegate;
     
     // Configure camera controller options
     const options: CameraControllerOptions = {
@@ -171,6 +173,23 @@ export class IPCamera {
       this.reachable = false;
       this.platform.log.error(`Unable to refresh camera active state for ${this.accessory.context.device.Name}:`, error);
     }
+  }
+
+  /**
+   * Adds (or reuses) a Motion Sensor service on this camera's own accessory and links it
+   * to the camera's primary stream-management service. HAP's linked-service mechanism only
+   * works within a single accessory, so motion has to live here — as a separate accessory
+   * it has no way to tell HomeKit which camera it belongs to, and Home never offers a
+   * live preview on the notification. Returns the service for CameraMotionSensor to drive.
+   */
+  attachMotionService(): Service {
+    const service = this.accessory.getService(this.platform.Service.MotionSensor) ||
+      this.accessory.addService(this.platform.Service.MotionSensor);
+
+    const primaryService = this.streamingDelegate.controller?.streamManagements?.[0]?.getService();
+    primaryService?.addLinkedService(service);
+
+    return service;
   }
 
   /**
