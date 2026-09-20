@@ -1,13 +1,13 @@
 // The camera accessory pulls in the streaming delegate, which depends on the
 // ESM-only `get-port`. Stubbing it keeps this suite to the platform's routing logic.
-// The fake still implements attachMotionService (real IPCamera's linking entry point)
+// The fake still implements getMotionService (real IPCamera's linking entry point)
 // so CameraMotionSensor has a service to drive, matching production wiring.
 jest.mock('../../src/accessories/ip-camera', () => ({
   IPCamera: class {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     constructor(private ezvizAPI: unknown, private platform: any, private accessory: any) {}
 
-    attachMotionService() {
+    getMotionService() {
       return this.accessory.getService(this.platform.Service.MotionSensor) ||
         this.accessory.addService(this.platform.Service.MotionSensor);
     }

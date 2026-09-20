@@ -9,6 +9,7 @@ A Homebridge plugin for integrating EZVIZ devices into Apple HomeKit. This plugi
 - 🏠 **HomeKit Integration**: Integration with Apple HomeKit ecosystem
 - 📹 **Camera Support**: Live streaming for EZVIZ cameras (WiFi and wired)
 - 🚨 **Motion Sensor**: Every camera gets a linked Motion Sensor for HomeKit automations and notifications
+- 🎥 **HomeKit Secure Video**: Optional (`enableHksv`) recording to iCloud+ on motion, triggered off the same linked Motion Sensor
 - 🔌 **Smart Plug Control**: Remote control of EZVIZ smart plugs
 - 🌍 **Multi-Region Support**: Support for all EZVIZ regions worldwide
 - 🔒 **Secure Authentication**: Secure login with your EZVIZ credentials
@@ -114,6 +115,7 @@ Add the following to your Homebridge `config.json` file:
 | `password` | string | Yes | Your EZVIZ account password |
 | `cameras` | array | No | Array of camera configurations |
 | `plugs` | array | No | Array of smart plug configurations |
+| `enableHksv` | boolean | No | Enables HomeKit Secure Video recording for every camera (default: false). Requires a HomeKit Hub (Apple TV/HomePod) and iCloud+ storage; runs a continuous background ffmpeg prebuffer process per camera |
 
 ### Camera Configuration
 

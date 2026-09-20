@@ -1461,6 +1461,12 @@
             }
           }
         }
+      },
+      "enableHksv": {
+        "title": "Enable HomeKit Secure Video",
+        "description": "Turns on HomeKit Secure Video recording for every camera. Requires a HomeKit Hub (Apple TV or HomePod) and an iCloud+ plan with storage. Runs a continuous background ffmpeg process per camera to maintain a short prebuffer, so only enable this if you actually use Secure Video.",
+        "type": "boolean",
+        "default": false
       }
     }
   }

@@ -24,7 +24,7 @@ import { readFile } from 'fs';
 import { join } from 'path';
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
 import { DeviceData, AlarmSnapshot } from '../types/data.js';
-import { CameraConfig } from '../types/config.js';
+import { getRtspUrl } from './rtsp-url.js';
 
 // An alarm snapshot is only worth serving in place of a live grab while it's still
 // representative of what the camera would show right now.
@@ -56,7 +56,6 @@ export class StreamingDelegate implements CameraStreamingDelegate {
   private ffmpegInstalled = true;
   private ffmpegSupportsLibfdk_acc = true;
   private deviceData: DeviceData;
-  private cameraConfig: CameraConfig;
   private getAlarmSnapshot?: (serial: string) => AlarmSnapshot | undefined;
   controller?: CameraController;
 
@@ -73,7 +72,6 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     this.hap = hap;
     this.log = log;
     this.deviceData = deviceData;
-    this.cameraConfig = deviceData.HBConfig as CameraConfig;
     this.getAlarmSnapshot = getAlarmSnapshot;
     this.videoProcessor = pathToFfmpeg as unknown as string || 'ffmpeg';
 
@@ -106,15 +104,6 @@ export class StreamingDelegate implements CameraStreamingDelegate {
         callback(undefined, data);
       }
     });
-  }
-
-  private getRtspUrl(): string {
-    const ip = this.deviceData.Wifi?.address && this.deviceData.Wifi.address !== '0.0.0.0'
-      ? this.deviceData.Wifi.address
-      : this.deviceData.Connection.localIp;
-    const port = this.deviceData.Connection.localRtspPort || 554;
-    const channel = this.deviceData.DeviceInfo.channelNumber || 1;
-    return `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@${ip}:${port}/Streaming/Channels/${channel}/`;
   }
 
   /**
@@ -158,7 +147,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
         return;
       }
 
-      const url = this.getRtspUrl();
+      const url = getRtspUrl(this.deviceData);
       getSnapshot(url)
         .then((snapshot) => {
           this.log.debug(`Snapshot for ${this.deviceData.Name} served from live grab in ${Date.now() - startedAt}ms`);
@@ -256,7 +245,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     let command = [
       '-rtsp_transport', 'tcp',
       '-use_wallclock_as_timestamps', '1',
-      '-i', this.getRtspUrl(),
+      '-i', getRtspUrl(this.deviceData),
       '-map', '0:0',
       '-c:v', 'copy',
       '-pix_fmt', 'yuv420p',

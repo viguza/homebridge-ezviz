@@ -9,7 +9,7 @@ import { makeFakeService, makeFakePlatform } from '../test-utils/fake-hap';
  * auto-clear timer. These tests drive poll()/onMqttAlarm() and the timers directly.
  *
  * CameraMotionSensor no longer owns an accessory — it drives a Service handed to it by IPCamera
- * (which links it to the camera's primary service; see IPCamera.attachMotionService), so
+ * (which links it to the camera's primary service; see IPCamera.getMotionService), so
  * the harness passes a bare fake Service plus the serial/display name IPCamera would.
  */
 function buildHarness(getLatestAlarm = jest.fn().mockResolvedValue(null)) {

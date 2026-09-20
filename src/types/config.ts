@@ -22,4 +22,10 @@ export interface EZVIZConfig extends PlatformConfig {
   domain: string;
   cameras?: Array<CameraConfig>;
   plugs?: Array<PlugConfig>;
+  /**
+   * Enables HomeKit Secure Video recording for every camera. Off by default: it runs a
+   * continuous background ffmpeg prebuffer process per camera and requires a HomeKit Hub
+   * (Apple TV/HomePod) plus iCloud+ storage, so it isn't something every install wants.
+   */
+  enableHksv?: boolean;
 }

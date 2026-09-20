@@ -206,10 +206,11 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   }
 
   /**
-   * Attaches a Motion Sensor service to the camera's own accessory, linked to its primary
-   * service — see IPCamera.attachMotionService. As of 1.10, this replaces the previous
-   * design of a separate "X Motion" accessory: existing installs will see that standalone
-   * accessory disappear and motion reappear as part of the camera accessory, which means
+   * Wires a CameraMotionSensor onto the Motion Sensor service the camera's own
+   * CameraController already created and linked via `sensors.motion` — see
+   * IPCamera.getMotionService. This replaces the previous design of a separate
+   * "X Motion" accessory: existing installs will see that standalone accessory
+   * disappear and motion reappear as part of the camera accessory, which means
    * any room assignment or automation built on the old accessory must be redone.
    */
   private createCameraMotionSensor(ezvizAPI: EZVIZAPI, device: DeviceData, camera: IPCamera) {
@@ -217,7 +218,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     // and the alarm history both report the bare device serial, so events must be
     // matched on that.
     const serial = device.DeviceInfo.deviceSerial;
-    const service = camera.attachMotionService();
+    const service = camera.getMotionService();
     const sensor = new CameraMotionSensor(ezvizAPI, this, service, serial, device.Name);
 
     const sensors = this.motionSensors.get(serial) ?? [];

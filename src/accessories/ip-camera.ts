@@ -1,13 +1,20 @@
 import {
+  AudioBitrate,
+  AudioRecordingCodecType,
+  AudioRecordingSamplerate,
   AudioStreamingCodecType, AudioStreamingSamplerate,
-  type CameraControllerOptions, type CharacteristicValue, type PlatformAccessory, type Service,
+  MediaContainerType,
+  type CameraController, type CameraControllerOptions, type CharacteristicValue, type PlatformAccessory, type Service,
 } from 'homebridge';
 import { StreamingDelegate } from '../utils/streaming-delegate.js';
+import { HksvRecordingDelegate } from '../utils/hksv-recording-delegate.js';
+import { getRtspUrl } from '../utils/rtsp-url.js';
 import type { EZVIZPlatform } from '../platform.js';
 import { EZVIZAPI } from '../api/ezviz-api.js';
 import { SwitchTypes } from '../utils/enums.js';
 
 const STATE_REFRESH_INTERVAL_MS = 60_000;
+const HKSV_PREBUFFER_LENGTH_MS = 4000;
 
 /**
  * IP Camera accessory for EZVIZ devices
@@ -18,6 +25,8 @@ export class IPCamera {
   private deviceSerial: string;
   private readonly operatingModeService: Service | null = null;
   private readonly streamingDelegate: StreamingDelegate;
+  private readonly motionService: Service;
+  private cameraController?: CameraController;
   private cameraActive = true;
   private reachable = true;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -49,9 +58,9 @@ export class IPCamera {
       this.operatingModeService = existingOperatingModeService ||
         this.accessory.addService(this.platform.Service.CameraOperatingMode);
 
-      // EventSnapshotsActive is a required characteristic of this service (per HAP spec) but
-      // we don't support HKSV event snapshots — set it statically so the service is valid and
-      // the Home app actually renders the "Camera" toggle in the camera's settings sheet.
+      // EventSnapshotsActive/PeriodicSnapshotsActive are required characteristics of this
+      // service per the HAP spec — set statically so the service is valid and the Home app
+      // actually renders the "Camera" toggle in the camera's settings sheet.
       this.operatingModeService.setCharacteristic(this.platform.Characteristic.EventSnapshotsActive, true);
       this.operatingModeService.setCharacteristic(this.platform.Characteristic.PeriodicSnapshotsActive, true);
 
@@ -74,7 +83,18 @@ export class IPCamera {
       (serial) => this.platform.getAlarmSnapshot(serial),
     );
     this.streamingDelegate = streamingDelegate;
-    
+
+    // Get-or-create the Motion Sensor service up front so it can be handed to the
+    // CameraController below via `sensors.motion` — that's the mechanism HAP-NodeJS
+    // uses both to correctly link the sensor to this camera accessory (its own
+    // addLinkedService plumbing does this for us) and, when HKSV recording is enabled,
+    // to recognize it as the recording trigger. CameraMotionSensor drives this service.
+    this.motionService = this.accessory.getService(this.platform.Service.MotionSensor) ||
+      this.accessory.addService(this.platform.Service.MotionSensor);
+
+    const hksvEnabled = Boolean(this.platform.config.enableHksv);
+    const rtspUrl = getRtspUrl(accessory.context.device);
+
     // Configure camera controller options
     const options: CameraControllerOptions = {
       cameraStreamCount: 2, // HomeKit requires at least 2 streams, but 1 is also just fine
@@ -110,15 +130,57 @@ export class IPCamera {
           ],
         },
       },
+      sensors: {
+        motion: this.motionService,
+      },
+      recording: hksvEnabled ? {
+        options: {
+          prebufferLength: HKSV_PREBUFFER_LENGTH_MS,
+          mediaContainerConfiguration: {
+            type: MediaContainerType.FRAGMENTED_MP4,
+            fragmentLength: HKSV_PREBUFFER_LENGTH_MS,
+          },
+          video: {
+            type: 0, // VideoCodecType.H264 — not re-exported by the `homebridge` package; it's the only member
+            parameters: {
+              profiles: [this.platform.api.hap.H264Profile.BASELINE, this.platform.api.hap.H264Profile.MAIN, this.platform.api.hap.H264Profile.HIGH],
+              levels: [this.platform.api.hap.H264Level.LEVEL3_1, this.platform.api.hap.H264Level.LEVEL3_2, this.platform.api.hap.H264Level.LEVEL4_0],
+            },
+            // HAP requires at least 1920x1080 and 1280x720 at 15fps, plus 24 or 30fps.
+            resolutions: [
+              [1920, 1080, 30],
+              [1920, 1080, 15],
+              [1280, 720, 30],
+              [1280, 720, 15],
+            ],
+          },
+          audio: {
+            codecs: [{
+              type: AudioRecordingCodecType.AAC_LC,
+              audioChannels: 1,
+              bitrateMode: AudioBitrate.VARIABLE,
+              samplerate: [AudioRecordingSamplerate.KHZ_32],
+            }],
+          },
+        },
+        delegate: new HksvRecordingDelegate(
+          rtspUrl,
+          accessory.context.device.Name,
+          this.platform.log,
+          () => Boolean(this.cameraController?.recordingManagement?.operatingModeService
+            .getCharacteristic(this.platform.Characteristic.RecordingAudioActive).value),
+        ),
+      } : undefined,
     };
 
     try {
       // Create and configure camera controller
       const cameraController = new this.platform.api.hap.CameraController(options);
+      this.cameraController = cameraController;
       streamingDelegate.controller = cameraController;
-    
-      accessory.configureController(streamingDelegate.controller);
-      
+
+      accessory.configureController(cameraController);
+
       this.platform.log.debug(`Successfully configured camera: ${accessory.context.device.Name}`);
     } catch (error) {
       this.platform.log.error(`Error configuring camera ${accessory.context.device.Name}:`, error);
@@ -176,20 +238,12 @@ export class IPCamera {
   }
 
   /**
-   * Adds (or reuses) a Motion Sensor service on this camera's own accessory and links it
-   * to the camera's primary stream-management service. HAP's linked-service mechanism only
-   * works within a single accessory, so motion has to live here — as a separate accessory
-   * it has no way to tell HomeKit which camera it belongs to, and Home never offers a
-   * live preview on the notification. Returns the service for CameraMotionSensor to drive.
+   * Returns the Motion Sensor service for this camera, for CameraMotionSensor to drive.
+   * Created up front in the constructor and handed to the CameraController via
+   * `sensors.motion`, so HAP-NodeJS owns linking it to the camera correctly.
    */
-  attachMotionService(): Service {
-    const service = this.accessory.getService(this.platform.Service.MotionSensor) ||
-      this.accessory.addService(this.platform.Service.MotionSensor);
-
-    const primaryService = this.streamingDelegate.controller?.streamManagements?.[0]?.getService();
-    primaryService?.addLinkedService(service);
-
-    return service;
+  getMotionService(): Service {
+    return this.motionService;
   }
 
   /**

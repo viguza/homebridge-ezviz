@@ -10,7 +10,7 @@ const MOTION_WINDOW_MS = 60_000;
  * Drives a HomeKit Motion Sensor service via MQTT push / REST poll. This does not own an
  * accessory — the service is created by IPCamera and linked to the camera's primary
  * service, so Home can associate a motion notification with that specific camera and
- * offer a live preview. See IPCamera.attachMotionService.
+ * offer a live preview. See IPCamera.getMotionService.
  */
 export class CameraMotionSensor {
   private motionDetected = false;
