@@ -149,9 +149,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
 
         this.discoveredCacheUUIDs.push(device.UUID);
 
-        if (CAMERA_DEVICE_TYPES.has(device.Type as DeviceTypes) &&
-            (device.HBConfig as CameraConfig | undefined)?.motionSensor &&
-            created instanceof IPCamera) {
+        if (CAMERA_DEVICE_TYPES.has(device.Type as DeviceTypes) && created instanceof IPCamera) {
           this.createCameraMotionSensor(ezvizAPI, device, created);
         }
       }

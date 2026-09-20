@@ -100,8 +100,8 @@ function buildHarness() {
   const config = {
     name: 'EZVIZ',
     cameras: [
-      { serial: 'DUAL001', username: 'u', code: 'c', dualCamera: true, motionSensor: true },
-      { serial: 'BATT001', username: 'u', code: 'c', motionSensor: true },
+      { serial: 'DUAL001', username: 'u', code: 'c', dualCamera: true },
+      { serial: 'BATT001', username: 'u', code: 'c' },
     ],
   } as unknown as EZVIZConfig;
 
@@ -122,7 +122,8 @@ const deviceListResponse = {
 } as unknown as ListDevicesResponse;
 
 // Mirrors platform.ts's discoverDevices loop: create the camera accessory first (as
-// IPCamera, mocked above), then attach a linked motion sensor onto it.
+// IPCamera, mocked above), then attach a linked motion sensor onto it. Every camera
+// gets one — there's no config opt-in.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createSensors(platform: any) {
   const ezvizApi = { getLatestAlarm: jest.fn().mockResolvedValue(null) } as unknown as EZVIZAPI;
@@ -132,7 +133,7 @@ function createSensors(platform: any) {
     accessory.context.device = device;
     platform.api.registerPlatformAccessories('plugin', 'platform', [accessory]);
     const camera = platform.createAccessory(ezvizApi, accessory, device.Type);
-    if (CAMERA_DEVICE_TYPES.has(device.Type as DeviceTypes) && device.HBConfig?.motionSensor) {
+    if (CAMERA_DEVICE_TYPES.has(device.Type as DeviceTypes)) {
       platform.createCameraMotionSensor(ezvizApi, device, camera);
     }
   }

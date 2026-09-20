@@ -1437,12 +1437,6 @@
               "description": "Enable this if your device has multiple physical cameras (e.g., H9c dual camera). This will create separate accessories for each camera lens.",
               "type": "boolean",
               "default": false
-            },
-            "motionSensor": {
-              "title": "Motion Sensor",
-              "description": "Adds a Motion Sensor to this camera (polls the EZVIZ alarm history every 30 seconds, motion stays active for 60 seconds after the last alarm). As of 1.10, this lives on the camera's own accessory instead of a separate one, so tapping a motion notification can offer a live preview. If you already had this enabled, upgrading removes the old separate 'X Motion' accessory — you'll need to reassign its room and rebuild any automation built on it.",
-              "type": "boolean",
-              "default": false
             }
           }
         }

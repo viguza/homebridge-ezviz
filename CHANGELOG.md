@@ -11,14 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Camera snapshot requests (the Home app's camera tile, Siri, widgets) are now served from the most recent motion alarm snapshot when it's still fresh (under 20s old), instead of always doing a live RTSP/ffmpeg grab
 
 ### Changed
-- **Breaking for existing `motionSensor: true` users:** the motion sensor no longer lives on its own separate "X Motion" accessory — it's now a Motion Sensor service on the camera's own accessory, linked to its video stream. This is what lets HomeKit offer a live preview when you tap a motion notification, which a standalone accessory has no way to do. On upgrade, the old separate accessory disappears; you'll need to reassign the camera's room if the two were split before, and **rebuild any automation that referenced the old "X Motion" accessory** — it will silently stop working otherwise
+- **Breaking:** every camera now gets a Motion Sensor, linked to its video stream, with no config opt-in required. Previously it lived on its own separate "X Motion" accessory, gated behind `motionSensor: true`. It's now a service on the camera's own accessory instead — this is what lets HomeKit offer a live preview when you tap a motion notification, which a standalone accessory has no way to do. On upgrade, any old separate "X Motion" accessory disappears; you'll need to reassign the camera's room if the two were split before, and **rebuild any automation that referenced the old "X Motion" accessory** — it will silently stop working otherwise. A full remove-and-re-add of the Homebridge bridge in the Home app may be needed for the new service to be recognized reliably — a plain restart isn't always enough
 - `getLastAlarmTime` replaced by `getLatestAlarm`, now querying `/v3/alarms/v2/advanced` (filters server-side by device) instead of `/v3/unifiedmsg/list` (silently ignored the device filter and always returned global results, requiring client-side matching)
 
 ### Fixed
 - Nothing yet
 
 ### Removed
-- Nothing yet
+- The `motionSensor` camera config option — motion is no longer opt-in, see Changed above
 
 ## [1.9.4] - 2026-09-17
 
