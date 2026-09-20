@@ -8,13 +8,13 @@ import { FakeAccessory, makeFakePlatform } from '../test-utils/fake-hap';
  * MQTT able to trigger it immediately regardless of poll timing. Both paths share a single
  * auto-clear timer. These tests drive poll()/onMqttAlarm() and the timers directly.
  */
-function buildHarness(getLastAlarmTime = jest.fn().mockResolvedValue(null)) {
+function buildHarness(getLatestAlarm = jest.fn().mockResolvedValue(null)) {
   const platform = makeFakePlatform();
   const accessory = new FakeAccessory('Front Door Motion');
   accessory.context.serial = 'CAM001';
-  const api = { getLastAlarmTime } as unknown as EZVIZAPI;
+  const api = { getLatestAlarm } as unknown as EZVIZAPI;
 
-  return { platform, accessory, api, getLastAlarmTime };
+  return { platform, accessory, api, getLatestAlarm };
 }
 
 describe('MotionSensor', () => {
@@ -28,7 +28,7 @@ describe('MotionSensor', () => {
   });
 
   test('the first poll only establishes a baseline and does not trigger motion', async () => {
-    const { platform, accessory, api } = buildHarness(jest.fn().mockResolvedValue(1000));
+    const { platform, accessory, api } = buildHarness(jest.fn().mockResolvedValue({ time: 1000, picUrl: '' }));
     const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
     await Promise.resolve();
 
@@ -40,8 +40,10 @@ describe('MotionSensor', () => {
   });
 
   test('a changed alarm timestamp on a later poll triggers motion', async () => {
-    const getLastAlarmTime = jest.fn().mockResolvedValueOnce(1000).mockResolvedValueOnce(2000);
-    const { platform, accessory, api } = buildHarness(getLastAlarmTime);
+    const getLatestAlarm = jest.fn()
+      .mockResolvedValueOnce({ time: 1000, picUrl: '' })
+      .mockResolvedValueOnce({ time: 2000, picUrl: 'https://example.com/pic.jpg' });
+    const { platform, accessory, api } = buildHarness(getLatestAlarm);
     const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
     await Promise.resolve();
 
@@ -51,6 +53,7 @@ describe('MotionSensor', () => {
     const service = accessory.getService(platform.Service.MotionSensor)!;
     expect(service.getCharacteristic(platform.Characteristic.MotionDetected).onGetHandler!()).toBe(true);
     expect(service.updates).toContainEqual(['MotionDetected', true]);
+    expect(platform.updateAlarmSnapshot).toHaveBeenCalledWith('CAM001', 'https://example.com/pic.jpg');
 
     sensor.stopPolling();
   });
@@ -113,18 +116,18 @@ describe('MotionSensor', () => {
   });
 
   test('stopPolling stops further polling', async () => {
-    const { getLastAlarmTime, platform, accessory, api } = buildHarness();
+    const { getLatestAlarm, platform, accessory, api } = buildHarness();
     const sensor = new MotionSensor(api, platform as unknown as EZVIZPlatform, accessory as never);
     await Promise.resolve();
-    expect(getLastAlarmTime).toHaveBeenCalledTimes(1);
+    expect(getLatestAlarm).toHaveBeenCalledTimes(1);
 
     jest.advanceTimersByTime(30_000);
     await Promise.resolve();
-    expect(getLastAlarmTime).toHaveBeenCalledTimes(2);
+    expect(getLatestAlarm).toHaveBeenCalledTimes(2);
 
     sensor.stopPolling();
     jest.advanceTimersByTime(30_000);
     await Promise.resolve();
-    expect(getLastAlarmTime).toHaveBeenCalledTimes(2);
+    expect(getLatestAlarm).toHaveBeenCalledTimes(2);
   });
 });

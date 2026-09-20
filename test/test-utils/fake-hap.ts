@@ -108,5 +108,7 @@ export function makeFakePlatform() {
         HAPStatus: { SERVICE_COMMUNICATION_FAILURE: -70402 },
       },
     },
+    updateAlarmSnapshot: jest.fn(),
+    getAlarmSnapshot: jest.fn(),
   };
 }

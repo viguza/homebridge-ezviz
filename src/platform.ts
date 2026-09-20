@@ -10,7 +10,7 @@ import { EZVIZConfig, CameraConfig } from './types/config.js';
 import { Credentials } from './types/login.js';
 import { DeviceTypes, CAMERA_DEVICE_TYPES } from './utils/enums.js';
 import { ListDevicesResponse } from './types/devices.js';
-import { DeviceData } from './types/data.js';
+import { DeviceData, AlarmSnapshot } from './types/data.js';
 
 /**
  * EZVIZ Platform for Homebridge
@@ -24,6 +24,10 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   public readonly discoveredCacheUUIDs: string[] = [];
   private readonly motionSensors: Map<string, MotionSensor[]> = new Map();
   private mqttClient: EzvizMqttClient | null = null;
+  private ezvizAPI: EZVIZAPI | null = null;
+  // Latest alarm snapshot URL per device serial, used as a fast path for HomeKit
+  // snapshot requests shortly after a motion event instead of a live RTSP grab.
+  private readonly alarmSnapshots: Map<string, AlarmSnapshot> = new Map();
 
   constructor(
     public readonly log: Logging,
@@ -43,6 +47,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   async didFinishLaunching(): Promise<void> {
     try {
       const ezvizAPI = new EZVIZAPI(this.config, this.log);
+      this.ezvizAPI = ezvizAPI;
       const credentials = await this.authenticate(ezvizAPI);
       
       if (credentials) {
@@ -240,6 +245,43 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     for (const sensor of sensors) {
       sensor.onMqttAlarm();
     }
+    this.refreshAlarmSnapshot(serial);
+  }
+
+  /**
+   * Fetches the freshest alarm snapshot for a device right after an MQTT push, so the
+   * camera's next HomeKit snapshot request can serve it instead of a live RTSP grab.
+   * Fire-and-forget: never blocks motion sensor triggering above.
+   */
+  private refreshAlarmSnapshot(serial: string): void {
+    if (!this.ezvizAPI) {
+      return;
+    }
+    this.ezvizAPI.getLatestAlarm(serial)
+      .then((alarm) => {
+        if (alarm?.picUrl) {
+          this.updateAlarmSnapshot(serial, alarm.picUrl);
+        }
+      })
+      .catch((error) => {
+        this.log.debug(`Failed to refresh alarm snapshot for ${serial}:`, error);
+      });
+  }
+
+  /**
+   * Records the latest alarm snapshot URL for a device (called from the MQTT push
+   * handler and from MotionSensor's REST poll fallback).
+   */
+  updateAlarmSnapshot(serial: string, url: string): void {
+    this.alarmSnapshots.set(serial, { url, fetchedAt: Date.now() });
+  }
+
+  /**
+   * Returns the cached alarm snapshot for a device, if any, for StreamingDelegate's
+   * snapshot-request fast path.
+   */
+  getAlarmSnapshot(serial: string): AlarmSnapshot | undefined {
+    return this.alarmSnapshots.get(serial);
   }
 
   private async startMqtt(ezvizAPI: EZVIZAPI): Promise<void> {

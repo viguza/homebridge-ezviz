@@ -82,20 +82,24 @@ export class MotionSensor {
   // regardless of how old that timestamp is. Clears are handled by the timer only.
   private async poll(): Promise<void> {
     try {
-      const alarmTime = await this.api.getLastAlarmTime(this.serial);
-      if (alarmTime === null) {
+      const alarm = await this.api.getLatestAlarm(this.serial);
+      if (alarm === null) {
         return;
+      }
+
+      if (alarm.picUrl) {
+        this.platform.updateAlarmSnapshot(this.serial, alarm.picUrl);
       }
 
       if (this.lastSeenAlarmTime === undefined) {
-        this.lastSeenAlarmTime = alarmTime;
-        this.platform.log.debug(`${this.accessory.displayName}: initialised alarmTime=${alarmTime}`);
+        this.lastSeenAlarmTime = alarm.time;
+        this.platform.log.debug(`${this.accessory.displayName}: initialised alarmTime=${alarm.time}`);
         return;
       }
 
-      if (alarmTime !== this.lastSeenAlarmTime) {
-        this.platform.log.debug(`${this.accessory.displayName}: new alarm via poll (${this.lastSeenAlarmTime} → ${alarmTime})`);
-        this.lastSeenAlarmTime = alarmTime;
+      if (alarm.time !== this.lastSeenAlarmTime) {
+        this.platform.log.debug(`${this.accessory.displayName}: new alarm via poll (${this.lastSeenAlarmTime} → ${alarm.time})`);
+        this.lastSeenAlarmTime = alarm.time;
         this.triggerMotion();
       }
     } catch (error) {

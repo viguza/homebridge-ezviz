@@ -99,7 +99,7 @@ const deviceListResponse = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createSensors(platform: any) {
-  const ezvizApi = { getLastAlarmTime: jest.fn().mockResolvedValue(null) } as unknown as EZVIZAPI;
+  const ezvizApi = { getLatestAlarm: jest.fn().mockResolvedValue(null) } as unknown as EZVIZAPI;
   const devices = platform.extractDevicesData(deviceListResponse);
   for (const device of devices) {
     if (CAMERA_DEVICE_TYPES.has(device.Type as DeviceTypes) && device.HBConfig?.motionSensor) {

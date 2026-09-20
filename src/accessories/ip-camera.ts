@@ -66,7 +66,12 @@ export class IPCamera {
     }
 
     // Create streaming delegate
-    const streamingDelegate = new StreamingDelegate(this.platform.api.hap, accessory.context.device, this.platform.log);
+    const streamingDelegate = new StreamingDelegate(
+      this.platform.api.hap,
+      accessory.context.device,
+      this.platform.log,
+      (serial) => this.platform.getAlarmSnapshot(serial),
+    );
     
     // Configure camera controller options
     const options: CameraControllerOptions = {

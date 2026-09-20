@@ -1,3 +1,4 @@
+import axios from 'axios';
 import {
   CameraController,
   CameraStreamingDelegate,
@@ -22,8 +23,13 @@ import { FfmpegProcess, isFfmpegInstalled, getSnapshot, getCodecsOutput } from '
 import { readFile } from 'fs';
 import { join } from 'path';
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
-import { DeviceData } from '../types/data.js';
+import { DeviceData, AlarmSnapshot } from '../types/data.js';
 import { CameraConfig } from '../types/config.js';
+
+// An alarm snapshot is only worth serving in place of a live grab while it's still
+// representative of what the camera would show right now.
+const ALARM_SNAPSHOT_MAX_AGE_MS = 20_000;
+const ALARM_SNAPSHOT_FETCH_TIMEOUT_MS = 3_000;
 
 type SessionInfo = {
   address: string; // address of the HAP controller
@@ -51,17 +57,24 @@ export class StreamingDelegate implements CameraStreamingDelegate {
   private ffmpegSupportsLibfdk_acc = true;
   private deviceData: DeviceData;
   private cameraConfig: CameraConfig;
+  private getAlarmSnapshot?: (serial: string) => AlarmSnapshot | undefined;
   controller?: CameraController;
 
   // keep track of sessions
   private pendingSessions: Record<string, SessionInfo> = {};
   private ongoingSessions: Record<string, FfmpegProcess | undefined> = {};
 
-  constructor(hap: HAP, deviceData: DeviceData, log: Logging) {
+  constructor(
+    hap: HAP,
+    deviceData: DeviceData,
+    log: Logging,
+    getAlarmSnapshot?: (serial: string) => AlarmSnapshot | undefined,
+  ) {
     this.hap = hap;
     this.log = log;
     this.deviceData = deviceData;
     this.cameraConfig = deviceData.HBConfig as CameraConfig;
+    this.getAlarmSnapshot = getAlarmSnapshot;
     this.videoProcessor = pathToFfmpeg as unknown as string || 'ffmpeg';
 
     // Check if ffmpeg is installed
@@ -104,11 +117,43 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     return `rtsp://${this.cameraConfig.username}:${this.cameraConfig.code}@${ip}:${port}/Streaming/Channels/${channel}/`;
   }
 
+  /**
+   * Fetches the cached alarm snapshot for this device if one exists and is still fresh.
+   * Returns null (rather than throwing) on any miss so callers can fall back to a live grab.
+   */
+  private async getCachedAlarmSnapshot(): Promise<Buffer | null> {
+    if (!this.getAlarmSnapshot) {
+      return null;
+    }
+    const cached = this.getAlarmSnapshot(this.deviceData.DeviceInfo.deviceSerial);
+    if (!cached || Date.now() - cached.fetchedAt > ALARM_SNAPSHOT_MAX_AGE_MS) {
+      return null;
+    }
+    try {
+      const response = await axios.get<ArrayBuffer>(cached.url, {
+        responseType: 'arraybuffer',
+        timeout: ALARM_SNAPSHOT_FETCH_TIMEOUT_MS,
+      });
+      return Buffer.from(response.data);
+    } catch (error) {
+      this.log.debug(`Alarm snapshot fetch failed for ${this.deviceData.Name}, falling back to live grab:`, error);
+      return null;
+    }
+  }
+
   handleSnapshotRequest(request: SnapshotRequest, callback: SnapshotRequestCallback): void {
     const sleepSwitch = this.deviceData.Switches?.find((x) => x.type === SwitchTypes.Sleep);
     if (sleepSwitch?.enable) {
       this.getOfflineImage(callback);
-    } else {
+      return;
+    }
+
+    this.getCachedAlarmSnapshot().then((cached) => {
+      if (cached) {
+        callback(undefined, cached);
+        return;
+      }
+
       const url = this.getRtspUrl();
       getSnapshot(url)
         .then((snapshot) => {
@@ -118,7 +163,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
           this.log.error(`Error fetching snapshot for ${this.deviceData.Name}`);
           callback(error);
         });
-    }
+    });
   }
 
   async prepareStream(request: PrepareStreamRequest, callback: PrepareStreamCallback): Promise<void> {

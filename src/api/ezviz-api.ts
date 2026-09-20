@@ -13,7 +13,7 @@ import {
   EZVIZ_AUTH_ENDPOINT,
   EZVIZ_DEVICES_ENDPOINT,
   EZVIZ_SWITCH_STATUS_ENDPOINT,
-  EZVIZ_UNIFIEDMSG_ENDPOINT,
+  EZVIZ_ALARMINFO_ENDPOINT,
   EZVIZ_SERVER_INFO_ENDPOINT,
   EZVIZ_DEFENCE_MODE_ENDPOINT,
   EZVIZ_DEFENCE_MODE_GET_ENDPOINT,
@@ -333,17 +333,17 @@ export class EZVIZAPI {
   }
 
   /**
-   * Returns the timestamp (ms) of the most recent alarm for a device, or null if none.
-   * Fetches up to 10 recent messages and filters client-side — the API ignores the
-   * deviceSerials query param and always returns global results.
-   * The EZVIZ API may return the epoch in seconds or milliseconds; values > 1e10 are ms.
+   * Returns the most recent alarm's timestamp (ms) and snapshot URL for a device, or null
+   * if it has no alarm history. Uses /v3/alarms/v2/advanced, which filters server-side by
+   * deviceSerials — unlike /v3/unifiedmsg/list, which silently ignores that param and
+   * always returns global results.
    */
-  async getLastAlarmTime(serialNumber: string): Promise<number | null> {
+  async getLatestAlarm(serialNumber: string): Promise<{ time: number; picUrl: string } | null> {
     if (!this.sessionId) {
       try {
         await this.authenticate();
       } catch (error) {
-        this.log?.error('Failed to authenticate before fetching alarm time:', error);
+        this.log?.error('Failed to authenticate before fetching latest alarm:', error);
         throw error;
       }
     }
@@ -351,36 +351,29 @@ export class EZVIZAPI {
     try {
       const query = querystring.stringify({
         deviceSerials: serialNumber,
-        limit: 10,
-        stype: '92',
+        queryType: -1,
+        limit: 1,
+        stype: -1,
       });
 
       const response = await sendRequest(
         this.config,
         this.config.domain,
-        `${EZVIZ_UNIFIEDMSG_ENDPOINT}?${query}`,
+        `${EZVIZ_ALARMINFO_ENDPOINT}?${query}`,
         'GET',
         undefined,
         3,
         { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
-      ) as { message?: Array<{ time?: number | string; deviceSerial?: string }>; messages?: Array<{ time?: number | string; deviceSerial?: string }> };
+      ) as { alarms?: Array<{ alarmStartTime?: number; picUrl?: string }> };
 
-      const messages = response?.message ?? response?.messages ?? [];
-      this.log?.debug(`getLastAlarmTime(${serialNumber}): ${messages.length} message(s), first deviceSerial=${messages[0]?.deviceSerial ?? 'none'}`);
-
-      const latest = messages.find(m => m.deviceSerial === serialNumber);
-      if (!latest?.time) {
-        this.log?.debug(`getLastAlarmTime(${serialNumber}): no matching message found`);
+      const latest = response?.alarms?.[0];
+      if (!latest?.alarmStartTime) {
         return null;
       }
 
-      this.log?.debug(`getLastAlarmTime(${serialNumber}): raw time=${JSON.stringify(latest.time)}`);
-      const ts = typeof latest.time === 'string' ? parseFloat(latest.time) : latest.time;
-      const result = isNaN(ts) ? null : (ts > 1e10 ? ts : ts * 1000);
-      this.log?.debug(`getLastAlarmTime(${serialNumber}): resolved alarmTime=${result}`);
-      return result;
+      return { time: latest.alarmStartTime, picUrl: latest.picUrl ?? '' };
     } catch (error) {
-      this.log?.error('Error fetching last alarm time:', error);
+      this.log?.error('Error fetching latest alarm:', error);
       throw error;
     }
   }

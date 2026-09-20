@@ -277,58 +277,63 @@ describe('EZVIZAPI', () => {
     });
   });
 
-  describe('getLastAlarmTime', () => {
+  describe('getLatestAlarm', () => {
     beforeEach(() => {
       ezvizApi.sessionId = 'mockSessionId';
     });
 
-    test('returns ms timestamp when API returns ms epoch', async () => {
+    test('returns the timestamp and picUrl of the most recent alarm', async () => {
       const nowMs = Date.now();
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
-        message: [{ deviceSerial: '12345', time: nowMs }],
+        alarms: [{ alarmStartTime: nowMs, picUrl: 'https://example.com/pic.jpg' }],
       });
-      const result = await ezvizApi.getLastAlarmTime('12345');
-      expect(result).toBe(nowMs);
+      const result = await ezvizApi.getLatestAlarm('12345');
+      expect(result).toEqual({ time: nowMs, picUrl: 'https://example.com/pic.jpg' });
     });
 
-    test('converts seconds epoch to ms', async () => {
-      const nowSec = Math.floor(Date.now() / 1000);
-      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
-        message: [{ deviceSerial: '12345', time: nowSec }],
-      });
-      const result = await ezvizApi.getLastAlarmTime('12345');
-      expect(result).toBe(nowSec * 1000);
-    });
-
-    test('parses string timestamps', async () => {
+    test('defaults picUrl to an empty string when absent', async () => {
       const nowMs = Date.now();
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
-        message: [{ deviceSerial: '12345', time: String(nowMs) }],
+        alarms: [{ alarmStartTime: nowMs }],
       });
-      const result = await ezvizApi.getLastAlarmTime('12345');
-      expect(result).toBe(nowMs);
+      const result = await ezvizApi.getLatestAlarm('12345');
+      expect(result).toEqual({ time: nowMs, picUrl: '' });
     });
 
-    test('returns null when message list is empty', async () => {
+    test('returns null when the alarms list is empty', async () => {
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
-        message: [],
+        alarms: [],
       });
-      const result = await ezvizApi.getLastAlarmTime('12345');
+      const result = await ezvizApi.getLatestAlarm('12345');
       expect(result).toBeNull();
     });
 
-    test('returns null when time field is missing', async () => {
+    test('returns null when alarmStartTime is missing', async () => {
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
-        message: [{ deviceSerial: '12345' }],
+        alarms: [{ picUrl: 'https://example.com/pic.jpg' }],
       });
-      const result = await ezvizApi.getLastAlarmTime('12345');
+      const result = await ezvizApi.getLatestAlarm('12345');
       expect(result).toBeNull();
+    });
+
+    test('sends deviceSerials so the API filters server-side', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ alarms: [] });
+      await ezvizApi.getLatestAlarm('12345');
+      expect(sendRequest).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.stringContaining('deviceSerials=12345'),
+        'GET',
+        undefined,
+        expect.any(Number),
+        expect.any(Object),
+      );
     });
 
     test('throws and logs on API error', async () => {
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockRejectedValueOnce(new Error('Network error'));
-      await expect(ezvizApi.getLastAlarmTime('12345')).rejects.toThrow('Network error');
-      expect(mockLog.error).toHaveBeenCalledWith('Error fetching last alarm time:', expect.any(Error));
+      await expect(ezvizApi.getLatestAlarm('12345')).rejects.toThrow('Network error');
+      expect(mockLog.error).toHaveBeenCalledWith('Error fetching latest alarm:', expect.any(Error));
     });
   });
 

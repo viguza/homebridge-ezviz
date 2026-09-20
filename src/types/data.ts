@@ -1,6 +1,11 @@
 import { DeviceConfig } from './config.js';
 import { ConnectionInfo, WifiInfo, DeviceStatus, SwitchItem, P2PItem, ResourceInfo, DeviceInfo } from './devices.js';
 
+export interface AlarmSnapshot {
+  url: string;
+  fetchedAt: number;
+}
+
 export interface DeviceData {
   UUID: string;
   Serial: string;
