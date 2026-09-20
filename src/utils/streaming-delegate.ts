@@ -167,7 +167,6 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     //video setup
     const video = request.video;
     const videoPort = video.port;
-    const returnVideoPort = (await reservePorts())[0];
     const videoCryptoSuite = video.srtpCryptoSuite;
     const videoSrtpKey = video.srtp_key;
     const videoSrtpSalt = video.srtp_salt;
@@ -176,13 +175,26 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     //audio setup
     const audio = request.audio;
     const audioPort = audio.port;
-    const returnAudioPort = (await reservePorts())[0];
-    const twoWayAudioPort = (await reservePorts(2))[0];
-    const audioServerPort = (await reservePorts())[0];
     const audioCryptoSuite = video.srtpCryptoSuite;
     const audioSrtpKey = audio.srtp_key;
     const audioSrtpSalt = audio.srtp_salt;
     const audioSSRC = this.hap.CameraController.generateSynchronisationSource();
+
+    // These four reservations are independent of each other (the "must be sequential"
+    // constraint in reservePorts only applies to getting consecutive ports *within* a
+    // single call, e.g. the twoWayAudioPort pair) — running them in parallel instead of
+    // one after another shaves the sum of their round-trips off stream startup time.
+    const [
+      [returnVideoPort],
+      [returnAudioPort],
+      [twoWayAudioPort],
+      [audioServerPort],
+    ] = await Promise.all([
+      reservePorts(),
+      reservePorts(),
+      reservePorts(2),
+      reservePorts(),
+    ]);
 
     const sessionInfo: SessionInfo = {
       address: targetAddress,
@@ -244,6 +256,14 @@ export class StreamingDelegate implements CameraStreamingDelegate {
 
     let command = [
       '-rtsp_transport', 'tcp',
+      // ffmpeg's defaults (5s analyzeduration, multi-MB probesize) spend real time
+      // analyzing the input before producing any output — unnecessary here since we're
+      // remuxing (-c:v copy), not decoding, and already know it's H264 RTSP. This is the
+      // main fixable contributor to live view's multi-second startup delay.
+      '-fflags', 'nobuffer',
+      '-flags', 'low_delay',
+      '-probesize', '32',
+      '-analyzeduration', '0',
       '-use_wallclock_as_timestamps', '1',
       '-i', getRtspUrl(this.deviceData),
       '-map', '0:0',
