@@ -255,7 +255,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     this.ezvizAPI.getLatestAlarm(serial)
       .then((alarm) => {
         if (alarm?.picUrl) {
-          this.updateAlarmSnapshot(serial, alarm.picUrl);
+          this.updateAlarmSnapshot(serial, alarm.picUrl, alarm.time);
         }
       })
       .catch((error) => {
@@ -265,10 +265,11 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
 
   /**
    * Records the latest alarm snapshot URL for a device (called from the MQTT push
-   * handler and from CameraMotionSensor's REST poll fallback).
+   * handler and from CameraMotionSensor's REST poll fallback). alarmTime is the alarm's
+   * own occurrence time, not now — see AlarmSnapshot.
    */
-  updateAlarmSnapshot(serial: string, url: string): void {
-    this.alarmSnapshots.set(serial, { url, fetchedAt: Date.now() });
+  updateAlarmSnapshot(serial: string, url: string, alarmTime: number): void {
+    this.alarmSnapshots.set(serial, { url, alarmTime });
   }
 
   /**

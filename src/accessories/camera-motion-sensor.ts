@@ -83,7 +83,7 @@ export class CameraMotionSensor {
       }
 
       if (alarm.picUrl) {
-        this.platform.updateAlarmSnapshot(this.serial, alarm.picUrl);
+        this.platform.updateAlarmSnapshot(this.serial, alarm.picUrl, alarm.time);
       }
 
       if (this.lastSeenAlarmTime === undefined) {

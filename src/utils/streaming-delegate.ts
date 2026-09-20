@@ -126,7 +126,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       return null;
     }
     const cached = this.getAlarmSnapshot(this.deviceData.DeviceInfo.deviceSerial);
-    if (!cached || Date.now() - cached.fetchedAt > ALARM_SNAPSHOT_MAX_AGE_MS) {
+    if (!cached || Date.now() - cached.alarmTime > ALARM_SNAPSHOT_MAX_AGE_MS) {
       return null;
     }
     try {

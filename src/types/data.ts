@@ -3,7 +3,10 @@ import { ConnectionInfo, WifiInfo, DeviceStatus, SwitchItem, P2PItem, ResourceIn
 
 export interface AlarmSnapshot {
   url: string;
-  fetchedAt: number;
+  // The alarm's own occurrence time (EZVIZ's alarmStartTime), not when we cached the
+  // URL — the REST poll re-caches the same alarm every 30s even when nothing new has
+  // happened, so caching the fetch time would keep resetting the freshness clock.
+  alarmTime: number;
 }
 
 export interface DeviceData {

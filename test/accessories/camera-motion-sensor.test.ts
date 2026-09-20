@@ -54,7 +54,7 @@ describe('CameraMotionSensor', () => {
 
     expect(service.getCharacteristic(platform.Characteristic.MotionDetected).onGetHandler!()).toBe(true);
     expect(service.updates).toContainEqual(['MotionDetected', true]);
-    expect(platform.updateAlarmSnapshot).toHaveBeenCalledWith('CAM001', 'https://example.com/pic.jpg');
+    expect(platform.updateAlarmSnapshot).toHaveBeenCalledWith('CAM001', 'https://example.com/pic.jpg', 2000);
 
     sensor.stopPolling();
   });
