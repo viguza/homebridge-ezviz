@@ -46,7 +46,18 @@ export async function isFfmpegInstalled(ffmpegPath: string): Promise<boolean> {
 const SNAPSHOT_TIMEOUT_MS = 8_000;
 
 export async function getSnapshot(url: string, customFfmpeg?: string): Promise<Buffer> {
-  const command = ['-i', url, '-vframes', '1', '-f', 'mjpeg', '-'];
+  const command = [
+    // TCP avoids the packet loss/corruption UDP RTSP suffers on WiFi cameras (see
+    // streaming-delegate.ts's live-view command for the same fix). -timeout bounds the
+    // RTSP socket I/O itself (5s, in microseconds) so a dead/unreachable camera fails
+    // with an ffmpeg error well before execa's own SNAPSHOT_TIMEOUT_MS hard-kills it.
+    '-rtsp_transport', 'tcp',
+    '-timeout', '5000000',
+    '-i', url,
+    '-vframes', '1',
+    '-f', 'mjpeg',
+    '-',
+  ];
   const videoProcessor = customFfmpeg || pathToFfmpeg as unknown as string || 'ffmpeg';
   const ff = await execa(videoProcessor, command, { env: process.env, encoding: null, timeout: SNAPSHOT_TIMEOUT_MS });
   return ff.stdout;
