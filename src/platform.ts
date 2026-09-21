@@ -6,6 +6,7 @@ import { CameraMotionSensor } from './accessories/camera-motion-sensor.js';
 import { EzvizMqttClient } from './utils/mqtt-client.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { EZVIZAPI } from './api/ezviz-api.js';
+import { isRetryableError } from './api/ezviz-requests.js';
 import { EZVIZConfig, CameraConfig } from './types/config.js';
 import { Credentials } from './types/login.js';
 import { DeviceTypes, CAMERA_DEVICE_TYPES } from './utils/enums.js';
@@ -48,7 +49,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     try {
       const ezvizAPI = new EZVIZAPI(this.config, this.log);
       this.ezvizAPI = ezvizAPI;
-      const credentials = await this.authenticate(ezvizAPI);
+      const credentials = await this.authenticateWithRetry(ezvizAPI);
       
       if (credentials) {
         // Refresh session every 12 hours (uses refresh token, falls back to full re-auth)
@@ -77,6 +78,8 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
    * Authenticates with the EZVIZ API
    * @param ezvizAPI - The EZVIZ API instance
    * @returns Promise resolving to credentials or undefined if authentication fails
+   * @throws if the failure looks transient (network unreachable, DNS not resolving yet,
+   *         etc.) so authenticateWithRetry can retry instead of giving up permanently
    */
   async authenticate(ezvizAPI: EZVIZAPI): Promise<Credentials | undefined> {
     const region = this.config.region;
@@ -96,15 +99,45 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     try {
       this.config.domain = await ezvizAPI.getDomain(region);
       const credentials = await ezvizAPI.authenticate();
-      
+
       if (credentials) {
         this.log.info('Successfully authenticated with EZVIZ API');
       }
-      
+
       return credentials;
     } catch (error) {
+      if (isRetryableError(error)) {
+        throw error;
+      }
       this.log.error('Authentication failed:', error);
       return;
+    }
+  }
+
+  /**
+   * Wraps authenticate() with retry/backoff for startup, since a transient failure here
+   * (most commonly: the host just rebooted after a power outage and its network isn't up
+   * yet) would otherwise leave the plugin silently dead until Homebridge itself is
+   * restarted again. Retries indefinitely on network-looking errors — the host may stay
+   * offline for a while after a power event — but gives up immediately on a non-retryable
+   * rejection (bad credentials, unsupported 2FA, missing config) since retrying can't fix
+   * those.
+   */
+  async authenticateWithRetry(ezvizAPI: EZVIZAPI): Promise<Credentials | undefined> {
+    const maxDelayMs = 5 * 60 * 1000;
+    let delayMs = 15000;
+
+    for (;;) {
+      try {
+        return await this.authenticate(ezvizAPI);
+      } catch (error) {
+        this.log.warn(
+          `EZVIZ authentication failed, possibly because the network isn't up yet — retrying in ${Math.round(delayMs / 1000)}s:`,
+          (error as Error).message ?? error,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        delayMs = Math.min(delayMs * 2, maxDelayMs);
+      }
     }
   }
 
