@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Motion Sensor service is now created and linked via `CameraController`'s own `sensors.motion` option instead of a manual `addLinkedService` call — HAP-NodeJS's own mechanism, which HKSV's recording trigger specifically requires, rather than our hand-rolled equivalent
 
 ### Fixed
-- Nothing yet
+- Camera privacy switch writes (the `CameraOperatingMode` "Camera Off" toggle added in 1.9.0) now actually reach EZVIZ's servers instead of failing with a 403 "no permission" — they now try EZVIZ's v3 switch endpoint under the Android/web client identity `pyEzviz`/Home Assistant use first, falling back to the original endpoint for switch types that don't need it (#18)
 
 ### Removed
 - The `motionSensor` camera config option — motion is no longer opt-in, see Changed above

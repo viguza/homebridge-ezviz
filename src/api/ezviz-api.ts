@@ -13,6 +13,11 @@ import {
   EZVIZ_AUTH_ENDPOINT,
   EZVIZ_DEVICES_ENDPOINT,
   EZVIZ_SWITCH_STATUS_ENDPOINT,
+  EZVIZ_ANDROID_CLIENT_TYPE,
+  EZVIZ_ANDROID_USER_AGENT,
+  EZVIZ_ANDROID_STATIC_HEADERS,
+  EZVIZ_DEVICES_V3_ENDPOINT,
+  EZVIZ_SWITCH_STATUS_PATH,
   EZVIZ_ALARMINFO_ENDPOINT,
   EZVIZ_SERVER_INFO_ENDPOINT,
   EZVIZ_DEFENCE_MODE_ENDPOINT,
@@ -379,6 +384,64 @@ export class EZVIZAPI {
   }
 
   /**
+   * Writes a switch via EZVIZ's v3 endpoint, impersonating its Android/web client.
+   * EZVIZ's backend rejects Privacy/Sleep writes made under this plugin's normal iOS
+   * client identity with a 403 regardless of endpoint, but accepts them under this one —
+   * the same identity pyEzviz/Home Assistant use. Not universally reliable across every
+   * device/firmware/region, so setSwitchState falls back to the legacy endpoint on failure.
+   */
+  private async setSwitchStateV3(serialNumber: string, type: number, value: boolean): Promise<void> {
+    const channel = 0;
+    const enable = value ? 1 : 0;
+    const config: AxiosRequestConfig = {
+      method: 'put',
+      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
+      url: `${this.config.domain}${EZVIZ_DEVICES_V3_ENDPOINT}${serialNumber}/${channel}/${enable}/${type}${EZVIZ_SWITCH_STATUS_PATH}`,
+      headers: {
+        ...EZVIZ_ANDROID_STATIC_HEADERS,
+        'sessionid': this.sessionId,
+        'clienttype': EZVIZ_ANDROID_CLIENT_TYPE,
+        'user-agent': EZVIZ_ANDROID_USER_AGENT,
+      },
+    };
+
+    const response = await axios(config);
+    if (response.data?.meta?.code !== 200) {
+      throw new Error(`v3 switch write failed: ${response.data?.meta?.code} - ${response.data?.meta?.message}`);
+    }
+  }
+
+  /**
+   * Writes a switch via EZVIZ's older endpoint, under this plugin's normal iOS client
+   * identity. Works for most switch types (On/Sound/etc.); Privacy/Sleep are handled by
+   * setSwitchStateV3 above instead.
+   */
+  private async setSwitchStateLegacy(serialNumber: string, type: number, value: boolean): Promise<void> {
+    const config: AxiosRequestConfig = {
+      method: 'post',
+      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
+      url: `${this.config.domain}${EZVIZ_SWITCH_STATUS_ENDPOINT}`,
+      headers: {
+        'sessionid': this.sessionId,
+        'clienttype': EZVIZ_CLIENT_TYPE,
+        'user-agent': EZVIZ_USER_AGENT,
+      },
+      data: querystring.stringify({
+        channel: 0,
+        clientType: 1,
+        enable: value ? 1 : 0,
+        serial: serialNumber,
+        type: type,
+      }),
+    };
+
+    const response = await axios(config);
+    if (response.data?.retcode) {
+      throw new Error(`Switch state update failed: ${response.data.retcode}`);
+    }
+  }
+
+  /**
    * Sets the state of a switch/plug
    * @param serialNumber - The device serial number
    * @param type - The switch type
@@ -398,37 +461,19 @@ export class EZVIZAPI {
       }
     }
 
-    const config: AxiosRequestConfig = {
-      method: 'post',
-      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
-      url: `${this.config.domain}${EZVIZ_SWITCH_STATUS_ENDPOINT}`,
-      headers: {
-        'sessionid': this.sessionId,
-        'clienttype': EZVIZ_CLIENT_TYPE,
-        'user-agent': EZVIZ_USER_AGENT,
-      },
-      data: querystring.stringify({
-        channel: 0,
-        clientType: 1,
-        enable: value ? 1 : 0,
-        serial: serialNumber,
-        type: type,
-      }),
-    };
-
     try {
-      const response = await axios(config);
-      
-      if (response.data?.retcode) {
-        throw new Error(`Switch state update failed: ${response.data.retcode}`);
+      await this.setSwitchStateV3(serialNumber, type, value);
+    } catch (v3Error) {
+      this.log?.debug('v3 switch write failed, falling back to legacy endpoint:', v3Error);
+      try {
+        await this.setSwitchStateLegacy(serialNumber, type, value);
+      } catch (legacyError) {
+        this.log?.error('Error setting switch state:', legacyError);
+        throw legacyError;
       }
-      
-      this.invalidateDeviceListCache();
-      return response.data;
-    } catch (error) {
-      this.log?.error('Error setting switch state:', error);
-      throw error;
     }
+
+    this.invalidateDeviceListCache();
   }
 
   /**

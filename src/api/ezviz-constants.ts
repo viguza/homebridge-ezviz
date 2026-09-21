@@ -4,7 +4,33 @@ export const EZVIZ_BASE_API_URL = 'https://api.ezvizlife.com';
 export const EZVIZ_DOMAINS_ENDPOINT = '/api/area/domain';
 export const EZVIZ_AUTH_ENDPOINT = '/v3/users/login/v5';
 export const EZVIZ_DEVICES_ENDPOINT = '/v3/userdevices/v1/resources/pagelist';
+// Legacy switch-write endpoint. Works for most switch types (On/Sound/etc.) but EZVIZ's
+// backend rejects Privacy/Sleep writes made under the iOS client identity above with a
+// 403 "no permission", regardless of endpoint — see EZVIZ_ANDROID_* below.
 export const EZVIZ_SWITCH_STATUS_ENDPOINT = '/api/device/switchStatus';
+// pyEzviz / Home Assistant's EZVIZ integration write Privacy/Sleep successfully by
+// impersonating EZVIZ's Android/web client instead of the iOS app identity above — EZVIZ's
+// backend appears to gate some switch writes by client identity, not just endpoint. Values
+// mirror what pyEzviz sends (verbatim, down to the fixed featureCode); scoped to switch
+// writes only since the iOS identity already works fine for every other request this
+// plugin makes.
+export const EZVIZ_ANDROID_CLIENT_TYPE = '3';
+export const EZVIZ_ANDROID_USER_AGENT = 'okhttp/3.12.1';
+export const EZVIZ_ANDROID_FEATURE_CODE = '1fc28fa018178a1cd1c091b13b2f9f02';
+export const EZVIZ_ANDROID_STATIC_HEADERS = {
+  featureCode: EZVIZ_ANDROID_FEATURE_CODE,
+  osVersion: '',
+  clientVersion: '',
+  netType: 'WIFI',
+  customno: '1000001',
+  ssid: '',
+  clientNo: 'web_site',
+  appId: 'ys7',
+  language: 'en_GB',
+  lang: 'en',
+} as const;
+export const EZVIZ_DEVICES_V3_ENDPOINT = '/v3/devices/';
+export const EZVIZ_SWITCH_STATUS_PATH = '/switchStatus';
 export const EZVIZ_DEFENCE_MODE_ENDPOINT = '/v3/userdevices/v1/group/switchDefenceMode';
 export const EZVIZ_DEFENCE_MODE_GET_ENDPOINT = '/v3/userdevices/v1/group/defenceMode';
 export const API_ENDPOINT_REFRESH = '/v3/apigateway/login';
