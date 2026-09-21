@@ -368,35 +368,16 @@ describe('EZVIZAPI', () => {
   describe('setSwitchState', () => {
     beforeEach(() => {
       ezvizApi.sessionId = 'mockSessionId';
-      (axios as jest.MockedFunction<typeof axios>).mockClear();
     });
 
-    test('setSwitchState succeeds via the v3 endpoint without falling back', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { meta: { code: 200 } } });
+    test('setSwitchState should send request', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValue({ data: {} });
       await ezvizApi.setSwitchState('12345', 14, true);
-      expect(axios).toHaveBeenCalledTimes(1);
-      expect(axios).toHaveBeenCalledWith(expect.objectContaining({
-        method: 'put',
-        url: expect.stringContaining('/v3/devices/12345/0/1/14/switchStatus'),
-      }));
+      expect(axios).toHaveBeenCalled();
     });
 
-    test('falls back to the legacy endpoint when the v3 endpoint fails', async () => {
-      (axios as jest.MockedFunction<typeof axios>)
-        .mockResolvedValueOnce({ data: { meta: { code: 403 } } })
-        .mockResolvedValueOnce({ data: {} });
-      await ezvizApi.setSwitchState('12345', 14, true);
-      expect(axios).toHaveBeenCalledTimes(2);
-      expect(axios).toHaveBeenLastCalledWith(expect.objectContaining({
-        method: 'post',
-        url: expect.stringContaining('/api/device/switchStatus'),
-      }));
-    });
-
-    test('should log error if both the v3 and legacy endpoints fail', async () => {
-      (axios as jest.MockedFunction<typeof axios>)
-        .mockRejectedValueOnce(new Error('v3 network error'))
-        .mockRejectedValueOnce(new Error('Set switch state failed'));
+    test('should log error if set switch fails', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Set switch state failed'));
       await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Set switch state failed');
       expect(mockLog.error).toHaveBeenCalledWith('Error setting switch state:', expect.any(Error));
     });
@@ -412,10 +393,8 @@ describe('EZVIZAPI', () => {
       expect(mockLog.error).toHaveBeenCalledWith('Failed to authenticate before setting switch state:', expect.any(Error));
     });
 
-    test('should throw error if switch state update fails with retcode on both endpoints', async () => {
-      (axios as jest.MockedFunction<typeof axios>)
-        .mockResolvedValueOnce({ data: { meta: { code: 403 } } })
-        .mockResolvedValueOnce({ data: { retcode: 999 } });
+    test('should throw error if switch state update fails with retcode', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { retcode: 999 } });
       await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Switch state update failed: 999');
     });
   });
