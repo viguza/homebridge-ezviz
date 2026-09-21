@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Nothing yet
+
+### Changed
+- Nothing yet
+
+### Fixed
+- Nothing yet
+
+### Removed
+- Nothing yet
+
+## [2.0.0] - 2026-09-20
+
+### ⚠️ Upgrade notes — read before updating
+This release changes how camera accessories register their Motion Sensor and recording-related services with HomeKit (see Changed below). Homebridge's own cache and the Home app's cache of a bridge's accessories/services don't always pick up structural changes like this from a plain restart.
+
+**If, after upgrading, a camera is missing its motion preview, the privacy/HKSV controls don't appear, or you see duplicate/ghost accessories:** remove the Homebridge bridge from the Home app and re-add it (not just a Homebridge restart). This is more likely to be needed if you have HKSV or the old `motionSensor` config option enabled, but can't be ruled out for any install given the scope of the accessory changes here.
+
+If you previously ran with `motionSensor: true`, the old standalone "X Motion" accessory disappears on upgrade regardless of a bridge reset — **any Home app automation or Siri Shortcut that referenced it needs to be rebuilt against the camera's own Motion Sensor.**
+
+### Added
 - Camera snapshot requests (the Home app's camera tile, Siri, widgets) are now served from the most recent motion alarm snapshot when it's still fresh (under 20s old), instead of always doing a live RTSP/ffmpeg grab
 - HomeKit Secure Video support, gated behind a new global `enableHksv` config flag (off by default). When enabled, every camera runs a lightweight background ffmpeg prebuffer (remux only, not re-encoded) while recording is active, and transcodes prebuffer + live footage to fragmented MP4 on an actual HomeKit-triggered recording, matching whatever H264/AAC parameters HomeKit negotiates. Recording is triggered off the same linked Motion Sensor used for notifications — no separate trigger service. Requires a HomeKit Hub and iCloud+ storage
 
@@ -15,9 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** every camera now gets a Motion Sensor, linked to its video stream, with no config opt-in required. Previously it lived on its own separate "X Motion" accessory, gated behind `motionSensor: true`. It's now a service on the camera's own accessory instead — this is what lets HomeKit offer a live preview when you tap a motion notification, which a standalone accessory has no way to do, and it's also what HKSV recording (above) needs to recognize a motion trigger at all. On upgrade, any old separate "X Motion" accessory disappears; you'll need to reassign the camera's room if the two were split before, and **rebuild any automation that referenced the old "X Motion" accessory** — it will silently stop working otherwise. A full remove-and-re-add of the Homebridge bridge in the Home app may be needed for the new service to be recognized reliably — a plain restart isn't always enough
 - `getLastAlarmTime` replaced by `getLatestAlarm`, now querying `/v3/alarms/v2/advanced` (filters server-side by device) instead of `/v3/unifiedmsg/list` (silently ignored the device filter and always returned global results, requiring client-side matching)
 - The Motion Sensor service is now created and linked via `CameraController`'s own `sensors.motion` option instead of a manual `addLinkedService` call — HAP-NodeJS's own mechanism, which HKSV's recording trigger specifically requires, rather than our hand-rolled equivalent
+- Live view starts faster: the four port reservations `prepareStream` needs are now requested in parallel instead of sequentially, and ffmpeg's RTSP probe is trimmed from its multi-second/multi-MB defaults (still enough to reliably detect the stream, unlike an earlier, too-aggressive attempt at this that briefly broke stream start entirely before being corrected)
 
 ### Fixed
-- Nothing yet
+- Camera snapshot requests now force RTSP over TCP (matching live view and HKSV) with a bounded socket timeout, instead of defaulting to UDP — fixes snapshot requests hanging until the 8s timeout on WiFi cameras, where UDP packet loss was corrupting the H264 frame ffmpeg was trying to grab
+- Startup authentication now retries with exponential backoff instead of failing permanently when the network isn't up yet at boot (e.g. right after a power outage) — previously required a manual Homebridge restart to recover once the network came back
 
 ### Removed
 - The `motionSensor` camera config option — motion is no longer opt-in, see Changed above
