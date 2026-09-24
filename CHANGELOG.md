@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [2.0.1] - 2026-09-24
+
+### Fixed
+- The "motion detected" log line's `(MQTT)` tag was sticky: once a sensor received one real-time MQTT push, every later trigger kept showing `(MQTT)` even when it actually came from the 30s poll fallback, making it impossible to tell which path detected a given event. The log now reflects the actual source (`(MQTT)` or `(poll)`) of each individual trigger (#49)
+
 ## [2.0.0] - 2026-09-20
 
 ### ⚠️ Upgrade notes — read before updating
