@@ -6,6 +6,8 @@ import { EZVIZAPI } from '../api/ezviz-api.js';
 const POLL_INTERVAL_MS = 30_000;
 const MOTION_WINDOW_MS = 60_000;
 
+type MotionSource = 'mqtt' | 'poll';
+
 /**
  * Drives a HomeKit Motion Sensor service via MQTT push / REST poll. This does not own an
  * accessory — the service is created by IPCamera and linked to the camera's primary
@@ -16,7 +18,6 @@ export class CameraMotionSensor {
   private motionDetected = false;
   private lastSeenAlarmTime: number | null | undefined = undefined;
   private clearTimer: ReturnType<typeof setTimeout> | null = null;
-  private usingMqtt = false;
   private pollInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -37,8 +38,7 @@ export class CameraMotionSensor {
 
   // Called by MQTT — real-time push, trigger immediately regardless of timestamp.
   onMqttAlarm(): void {
-    this.usingMqtt = true;
-    this.triggerMotion();
+    this.triggerMotion('mqtt');
   }
 
   stopPolling(): void {
@@ -49,7 +49,7 @@ export class CameraMotionSensor {
     }
   }
 
-  private triggerMotion(): void {
+  private triggerMotion(source: MotionSource): void {
     // Reset the 60s auto-clear window from now
     if (this.clearTimer) {
       clearTimeout(this.clearTimer);
@@ -59,7 +59,7 @@ export class CameraMotionSensor {
     if (!this.motionDetected) {
       this.motionDetected = true;
       this.service.updateCharacteristic(this.platform.Characteristic.MotionDetected, true);
-      this.platform.log.info(`${this.displayName}: motion detected${this.usingMqtt ? ' (MQTT)' : ''}`);
+      this.platform.log.info(`${this.displayName}: motion detected${source === 'mqtt' ? ' (MQTT)' : ' (poll)'}`);
     }
   }
 
@@ -95,7 +95,7 @@ export class CameraMotionSensor {
       if (alarm.time !== this.lastSeenAlarmTime) {
         this.platform.log.debug(`${this.displayName}: new alarm via poll (${this.lastSeenAlarmTime} → ${alarm.time})`);
         this.lastSeenAlarmTime = alarm.time;
-        this.triggerMotion();
+        this.triggerMotion('poll');
       }
     } catch (error) {
       this.platform.log.error(`${this.displayName}: motion poll failed:`, error);

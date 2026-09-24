@@ -84,6 +84,32 @@ describe('CameraMotionSensor', () => {
     sensor.stopPolling();
   });
 
+  test('a poll-triggered event after a prior MQTT event logs the poll source, not a stale MQTT tag', async () => {
+    const getLatestAlarm = jest.fn()
+      .mockResolvedValueOnce({ time: 1000, picUrl: '' })
+      .mockResolvedValueOnce({ time: 2000, picUrl: '' });
+    const { platform, service, api } = buildHarness(getLatestAlarm);
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
+    await Promise.resolve();
+
+    sensor.onMqttAlarm();
+    expect(platform.log.info).toHaveBeenCalledWith(expect.stringContaining('motion detected (MQTT)'));
+
+    jest.advanceTimersByTime(60_000); // let the MQTT-triggered motion clear before the next poll fires
+    await Promise.resolve();
+
+    jest.advanceTimersByTime(30_000); // poll picks up the changed alarm timestamp
+    await Promise.resolve();
+
+    expect(platform.log.info).toHaveBeenCalledWith(expect.stringContaining('motion detected (poll)'));
+    const mqttLogCalls = platform.log.info.mock.calls.filter(
+      ([message]: [string]) => message.includes('motion detected (MQTT)'),
+    );
+    expect(mqttLogCalls).toHaveLength(1); // only the earlier MQTT-triggered event, not this poll one
+
+    sensor.stopPolling();
+  });
+
   test('retriggering while already active resets the clear timer without a duplicate update', () => {
     const { platform, service, api } = buildHarness();
     const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
