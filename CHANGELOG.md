@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [2.0.2] - 2026-09-24
+
+### Fixed
+- The MQTT push subscription was only registered once at startup, tied to the sessionId active at that moment. The 12h session refresh issued a new sessionId but never reconnected MQTT, so the socket stayed "connected" while EZVIZ silently stopped routing real-time alarms to it — motion then fell back to the 30s poll indefinitely. MQTT now reconnects after every session refresh
+
 ## [2.0.1] - 2026-09-24
 
 ### Fixed
