@@ -52,11 +52,15 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       const credentials = await this.authenticateWithRetry(ezvizAPI);
       
       if (credentials) {
-        // Refresh session every 12 hours (uses refresh token, falls back to full re-auth)
+        // Refresh session every 12 hours (uses refresh token, falls back to full re-auth).
+        // The MQTT push subscription is registered against the current sessionId, so it
+        // must be re-established with the new one or it silently stops receiving pushes
+        // while the socket itself stays connected.
         setInterval(async () => {
           this.log.debug('Refreshing EZVIZ session');
           try {
             await ezvizAPI.refreshSession();
+            await this.restartMqtt(ezvizAPI);
           } catch (error) {
             this.log.error('Session refresh failed:', error);
           }
@@ -310,6 +314,19 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
    */
   getAlarmSnapshot(serial: string): AlarmSnapshot | undefined {
     return this.alarmSnapshots.get(serial);
+  }
+
+  /**
+   * Tears down and re-establishes the MQTT push connection, used after a session refresh
+   * since the push subscription is registered against the sessionId active at connect
+   * time — see startMqtt.
+   */
+  private async restartMqtt(ezvizAPI: EZVIZAPI): Promise<void> {
+    if (this.mqttClient) {
+      this.mqttClient.stop();
+      this.mqttClient = null;
+    }
+    await this.startMqtt(ezvizAPI);
   }
 
   private async startMqtt(ezvizAPI: EZVIZAPI): Promise<void> {
