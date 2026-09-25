@@ -258,6 +258,19 @@ describe('EZVIZAPI', () => {
       expect(authenticateSpy).toHaveBeenCalledTimes(1);
     });
 
+    test('should preserve username and pushAddr, which the MQTT reconnect needs', async () => {
+      mockConfig.credentials = { ...mockCredentials, username: 'ezvizUser', pushAddr: 'push.example.com' };
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({
+        data: { meta: { code: 200 }, sessionInfo: { sessionId: 'newSessionId', refreshSessionId: 'newRfSessionId' } },
+      });
+
+      await ezvizApi.refreshSession();
+
+      expect(mockConfig.credentials.username).toBe('ezvizUser');
+      expect(mockConfig.credentials.pushAddr).toBe('push.example.com');
+      expect(mockConfig.credentials.sessionId).toBe('newSessionId');
+    });
+
     test('concurrent callers share a single refresh request', async () => {
       (axios as jest.MockedFunction<typeof axios>).mockReset();
       (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({

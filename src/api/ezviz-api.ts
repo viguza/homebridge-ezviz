@@ -190,11 +190,11 @@ export class EZVIZAPI {
         return this.authenticate();
       }
 
+      // Spread to keep username/pushAddr, which the MQTT reconnect after a refresh needs.
       const updated: Credentials = {
+        ...creds,
         sessionId: result.sessionInfo.sessionId,
         rfSessionId: result.sessionInfo.refreshSessionId,
-        featureCode: creds.featureCode,
-        cuName: creds.cuName,
       };
 
       this.sessionId = updated.sessionId;
