@@ -4,6 +4,7 @@ import { createServer, Server } from 'net';
 import { Logging } from 'homebridge';
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
 import { Mp4Box, parseMp4Boxes } from './mp4-parser.js';
+import { redactCredentials } from './sanitize.js';
 
 const PREBUFFER_DURATION_MS = 4000;
 // A splice server that nobody ever connects to (e.g. HomeKit gave up before the
@@ -162,7 +163,7 @@ export class HksvPrebuffer {
       }
     });
     cp.on('error', (error) => {
-      this.log.error(`HKSV prebuffer ffmpeg for ${this.cameraName} failed to start:`, error);
+      this.log.error(`HKSV prebuffer ffmpeg for ${this.cameraName} failed to start: ${redactCredentials((error as Error).message)}`);
     });
   }
 

@@ -3,6 +3,7 @@ import { Logging, StreamRequestCallback } from 'homebridge';
 import { StreamingDelegate } from './streaming-delegate.js';
 import { Readable, Writable } from 'stream';
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
+import { redactCredentials } from './sanitize.js';
 
 export async function doesFfmpegSupportCodec(codec: string, ffmpegPath: string): Promise<boolean> {
   if (!codec) {
@@ -81,7 +82,7 @@ export class FfmpegProcess {
     let started = false;
     let startedCallback = false;
     const controller = delegate.controller;
-    const cmdOutput = `${title} command: ffmpeg ${command.join(' ')}`;
+    const cmdOutput = `${title} command: ffmpeg ${redactCredentials(command.join(' '))}`;
     if (ffmpegDebugOutput) {
       log.info(cmdOutput);
     } else {

@@ -13,6 +13,7 @@ import {
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
 import { parseMp4Boxes } from './mp4-parser.js';
 import { HksvPrebuffer } from './hksv-prebuffer.js';
+import { redactCredentials } from './sanitize.js';
 
 const DEFAULT_PREBUFFER_LENGTH_MS = 4000;
 
@@ -137,7 +138,7 @@ export class HksvRecordingDelegate implements CameraRecordingDelegate {
     this.process = cp;
     cp.stderr?.resume();
     cp.on('error', (error) => {
-      this.log.error(`HKSV recording ffmpeg for ${this.cameraName} failed to start:`, error);
+      this.log.error(`HKSV recording ffmpeg for ${this.cameraName} failed to start: ${redactCredentials((error as Error).message)}`);
     });
 
     let pendingInit: Buffer[] = [];

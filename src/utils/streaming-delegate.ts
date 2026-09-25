@@ -25,6 +25,7 @@ import { join } from 'path';
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
 import { DeviceData, AlarmSnapshot } from '../types/data.js';
 import { getRtspUrl } from './rtsp-url.js';
+import { redactCredentials } from './sanitize.js';
 
 // An alarm snapshot is only worth serving in place of a live grab while it's still
 // representative of what the camera would show right now.
@@ -154,8 +155,9 @@ export class StreamingDelegate implements CameraStreamingDelegate {
           callback(undefined, snapshot);
         })
         .catch((error) => {
-          this.log.error(`Error fetching snapshot for ${this.deviceData.Name} after ${Date.now() - startedAt}ms:`, error);
-          callback(error);
+          const message = redactCredentials(error instanceof Error ? error.message : String(error));
+          this.log.error(`Error fetching snapshot for ${this.deviceData.Name} after ${Date.now() - startedAt}ms: ${message}`);
+          callback(new Error(message));
         });
     });
   }
