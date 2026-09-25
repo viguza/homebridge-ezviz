@@ -104,7 +104,10 @@ export class FfmpegProcess {
       }, 3000);
 
       this.ff.stderr?.on('data', (data) => {
-        const output = String(data);
+        // ffmpeg echoes its input URL (e.g. "Input #0, rtsp, from 'rtsp://user:pass@...'"
+        // and in connection errors), and this text feeds both the logs and the error
+        // passed to HomeKit's callback.
+        const output = redactCredentials(String(data));
         lastOutput = `${title}: ${output}`;
         if (ffmpegDebugOutput) {
           log.info(lastOutput);
