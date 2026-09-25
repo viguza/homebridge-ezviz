@@ -10,6 +10,9 @@ const PREBUFFER_DURATION_MS = 4000;
 // A splice server that nobody ever connects to (e.g. HomeKit gave up before the
 // recording ffmpeg process reached it) would otherwise listen forever.
 const SPLICE_SERVER_TIMEOUT_MS = 60_000;
+// Long enough not to hammer a camera that's offline, short enough to have pre-roll
+// again well before the next motion event is likely.
+const PREBUFFER_RESTART_DELAY_MS = 10_000;
 
 interface TimedBox {
   box: Mp4Box;
@@ -55,6 +58,8 @@ export class HksvPrebuffer {
   private process: ChildProcess | null = null;
   private server: Server | null = null;
   private starting: Promise<void> | null = null;
+  private wanted = false;
+  private restartTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly rtspUrl: string,
@@ -63,6 +68,7 @@ export class HksvPrebuffer {
   ) {}
 
   async start(): Promise<void> {
+    this.wanted = true;
     if (this.process) {
       return;
     }
@@ -75,8 +81,17 @@ export class HksvPrebuffer {
   }
 
   stop(): void {
+    this.wanted = false;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
     this.process?.kill('SIGKILL');
     this.process = null;
+    this.resetStream();
+  }
+
+  private resetStream(): void {
     this.server?.close();
     this.server = null;
     this.boxes = [];
@@ -167,8 +182,23 @@ export class HksvPrebuffer {
     cp.stderr?.resume();
     cp.on('exit', (code, signal) => {
       this.log.debug(`HKSV prebuffer ffmpeg for ${this.cameraName} exited (code=${code}, signal=${signal})`);
-      if (this.process === cp) {
-        this.process = null;
+      if (this.process !== cp) {
+        return;
+      }
+      // Died on its own (RTSP drop, camera reboot) rather than via stop(): drop this
+      // instance's init segment so a restarted process's ftyp/moov aren't mistaken for
+      // media boxes, and bring it back so later recordings still get pre-roll.
+      this.process = null;
+      this.resetStream();
+      if (this.wanted && !this.restartTimer) {
+        this.restartTimer = setTimeout(() => {
+          this.restartTimer = null;
+          if (this.wanted) {
+            this.start().catch((error) => {
+              this.log.debug(`HKSV prebuffer restart for ${this.cameraName} failed: ${(error as Error).message}`);
+            });
+          }
+        }, PREBUFFER_RESTART_DELAY_MS);
       }
     });
     cp.on('error', (error) => {
