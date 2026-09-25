@@ -696,6 +696,28 @@ describe('EZVIZAPI', () => {
       expect(sendRequest).toHaveBeenCalledTimes(2);
     });
 
+    test('a list fetch that was in flight during a write neither returns nor caches its stale result', async () => {
+      const stale = { deviceInfos: [], SWITCH: { '12345': [{ type: 14, enable: false }] } };
+      const fresh = { deviceInfos: [], SWITCH: { '12345': [{ type: 14, enable: true }] } };
+      let resolveStale: (value: unknown) => void = () => {};
+      const sendRequestMock = sendRequest as jest.MockedFunction<typeof sendRequest>;
+      sendRequestMock.mockReset();
+      sendRequestMock
+        .mockImplementationOnce(() => new Promise((resolve) => {
+          resolveStale = resolve;
+        }))
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce(fresh);
+
+      const inFlight = ezvizApi.listDevices();
+      await ezvizApi.setSwitchState('12345', 14, true);
+      resolveStale(stale);
+
+      expect(await inFlight).toBe(fresh);
+      expect(await ezvizApi.listDevices()).toBe(fresh);
+      expect(sendRequestMock).toHaveBeenCalledTimes(3);
+    });
+
     test('should invalidate the cache after a switch write', async () => {
       await ezvizApi.listDevices();
       await ezvizApi.setSwitchState('12345', 14, true);

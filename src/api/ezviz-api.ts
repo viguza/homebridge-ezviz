@@ -37,6 +37,9 @@ export class EZVIZAPI {
   private log: Logging | undefined;
   private deviceListCache: { data: ListDevicesResponse; expiresAt: number } | null = null;
   private deviceListInFlight: Promise<ListDevicesResponse> | null = null;
+  // Bumped by every write, so a list fetch that was already in flight can tell its
+  // result may predate the write.
+  private deviceListGeneration = 0;
   private refreshInFlight: Promise<Credentials | undefined> | null = null;
   // Invoked after every successful session rotation, including ones triggered by a 401
   // mid-request, so anything bound to the old sessionId (the MQTT push subscription)
@@ -302,33 +305,49 @@ export class EZVIZAPI {
       }
     }
 
-    if (!forceRefresh) {
-      if (this.deviceListCache && this.deviceListCache.expiresAt > Date.now()) {
-        this.log?.debug('Using cached device list');
-        return this.deviceListCache.data;
-      }
-
-      if (this.deviceListInFlight) {
-        this.log?.debug('Joining in-flight device list request');
-        return this.deviceListInFlight;
-      }
+    if (!forceRefresh && this.deviceListCache && this.deviceListCache.expiresAt > Date.now()) {
+      this.log?.debug('Using cached device list');
+      return this.deviceListCache.data;
     }
 
-    const request = this.fetchDeviceList();
-    this.deviceListInFlight = request;
-
-    try {
-      return await request;
-    } finally {
-      if (this.deviceListInFlight === request) {
-        this.deviceListInFlight = null;
-      }
+    const generation = this.deviceListGeneration;
+    let request = forceRefresh ? null : this.deviceListInFlight;
+    if (request) {
+      this.log?.debug('Joining in-flight device list request');
+    } else {
+      request = this.startDeviceListFetch();
     }
+
+    const result = await request;
+    if (this.deviceListGeneration !== generation) {
+      // A write landed while this was in flight, so the result may predate it; returning
+      // it would revert the state the write just set.
+      return this.listDevices();
+    }
+    return result;
   }
 
-  /**
-   * Performs the actual device list request and populates the cache
-   */
+  private startDeviceListFetch(): Promise<ListDevicesResponse> {
+    const generation = this.deviceListGeneration;
+    const request = this.fetchDeviceList().then((info) => {
+      if (this.deviceListGeneration === generation) {
+        this.deviceListCache = { data: info, expiresAt: Date.now() + DEVICE_LIST_CACHE_TTL_MS };
+      }
+      return info;
+    });
+    this.deviceListInFlight = request;
+    request
+      .finally(() => {
+        if (this.deviceListInFlight === request) {
+          this.deviceListInFlight = null;
+        }
+      })
+      .catch(() => {
+        // Rejection is surfaced to the awaiting callers; this chain only clears state.
+      });
+    return request;
+  }
+
   private async fetchDeviceList(): Promise<ListDevicesResponse> {
     try {
       const query = querystring.stringify({
@@ -344,7 +363,6 @@ export class EZVIZAPI {
         undefined,
         { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
       );
-      this.deviceListCache = { data: info, expiresAt: Date.now() + DEVICE_LIST_CACHE_TTL_MS };
       return info;
     } catch (error) {
       this.log?.error('Error fetching devices:', error);
@@ -358,6 +376,8 @@ export class EZVIZAPI {
    */
   invalidateDeviceListCache(): void {
     this.deviceListCache = null;
+    this.deviceListInFlight = null;
+    this.deviceListGeneration++;
   }
 
   /**
