@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Nothing yet
+- A startup warning when the ffmpeg bundled via `ffmpeg-for-homebridge` is missing, which can happen when npm skips its install script. The log says whether the system ffmpeg is being used instead or no ffmpeg was found, and how to fix it (see Troubleshooting in the README)
 
 ### Changed
 - Nothing yet
