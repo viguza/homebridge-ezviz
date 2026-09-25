@@ -375,6 +375,18 @@ describe('EZVIZAPI', () => {
       expect(result).toBeNull();
     });
 
+    test('concurrent calls for the same serial share one request', async () => {
+      const sendRequestMock = sendRequest as jest.MockedFunction<typeof sendRequest>;
+      sendRequestMock.mockReset();
+      sendRequestMock.mockResolvedValue({ alarms: [{ alarmStartTime: 1000, picUrl: 'u' }] });
+
+      const [a, b] = await Promise.all([ezvizApi.getLatestAlarm('12345'), ezvizApi.getLatestAlarm('12345')]);
+      await ezvizApi.getLatestAlarm('67890');
+
+      expect(a).toEqual(b);
+      expect(sendRequestMock).toHaveBeenCalledTimes(2);
+    });
+
     test('sends deviceSerials so the API filters server-side', async () => {
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ alarms: [] });
       await ezvizApi.getLatestAlarm('12345');

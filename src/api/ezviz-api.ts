@@ -41,6 +41,7 @@ export class EZVIZAPI {
   // result may predate the write.
   private deviceListGeneration = 0;
   private refreshInFlight: Promise<Credentials | undefined> | null = null;
+  private readonly latestAlarmInFlight = new Map<string, Promise<{ time: number; picUrl: string } | null>>();
   // Invoked after every successful session rotation, including ones triggered by a 401
   // mid-request, so anything bound to the old sessionId (the MQTT push subscription)
   // can re-establish itself.
@@ -385,8 +386,22 @@ export class EZVIZAPI {
    * if it has no alarm history. Uses /v3/alarms/v2/advanced, which filters server-side by
    * deviceSerials — unlike /v3/unifiedmsg/list, which silently ignores that param and
    * always returns global results.
+   *
+   * Concurrent calls for the same serial share one request: a dual-lens camera has a
+   * motion sensor per lens, both polling the same device on the same schedule.
    */
-  async getLatestAlarm(serialNumber: string): Promise<{ time: number; picUrl: string } | null> {
+  getLatestAlarm(serialNumber: string): Promise<{ time: number; picUrl: string } | null> {
+    let request = this.latestAlarmInFlight.get(serialNumber);
+    if (!request) {
+      request = this.fetchLatestAlarm(serialNumber).finally(() => {
+        this.latestAlarmInFlight.delete(serialNumber);
+      });
+      this.latestAlarmInFlight.set(serialNumber, request);
+    }
+    return request;
+  }
+
+  private async fetchLatestAlarm(serialNumber: string): Promise<{ time: number; picUrl: string } | null> {
     if (!this.sessionId) {
       try {
         await this.authenticate();
