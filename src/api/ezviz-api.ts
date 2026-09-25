@@ -604,7 +604,8 @@ export class EZVIZAPI {
 
       // Extract the mode from the response
       // The response structure may vary, but typically it's in response.mode or response.defenceMode
-      const mode = response?.mode || response?.defenceMode || response?.data?.mode;
+      // `??`, not `||`: 0 (UNSET_MODE) is a valid mode, not a missing one.
+      const mode = response?.mode ?? response?.defenceMode ?? response?.data?.mode;
 
       if (mode === undefined || mode === null) {
         this.log?.debug('No mode found in response, defaulting to UNSET_MODE');

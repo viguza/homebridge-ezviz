@@ -600,6 +600,11 @@ describe('EZVIZAPI', () => {
       await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.UNSET_MODE);
     });
 
+    test('treats a top-level mode of 0 as a real value rather than falling through', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ mode: 0, defenceMode: DefenceMode.AWAY_MODE });
+      await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.UNSET_MODE);
+    });
+
     test('should default to UNSET_MODE when no mode is found in the response', async () => {
       (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({});
       await expect(ezvizApi.getDefenceMode(1)).resolves.toBe(DefenceMode.UNSET_MODE);
