@@ -258,6 +258,52 @@ describe('EZVIZAPI', () => {
       expect(authenticateSpy).toHaveBeenCalledTimes(1);
     });
 
+    test('concurrent callers share a single refresh request', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockReset();
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({
+        data: { meta: { code: 200 }, sessionInfo: { sessionId: 'newSessionId', refreshSessionId: 'newRfSessionId' } },
+      });
+
+      const [a, b] = await Promise.all([ezvizApi.refreshSession(), ezvizApi.refreshSession()]);
+
+      expect(axios).toHaveBeenCalledTimes(1);
+      expect(a).toBe(b);
+    });
+
+    test('notifies onSessionRefreshed after a successful refresh', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({
+        data: { meta: { code: 200 }, sessionInfo: { sessionId: 'newSessionId', refreshSessionId: 'newRfSessionId' } },
+      });
+      const onSessionRefreshed = jest.fn();
+      ezvizApi.onSessionRefreshed = onSessionRefreshed;
+
+      await ezvizApi.refreshSession();
+
+      expect(onSessionRefreshed).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not notify onSessionRefreshed when refresh and re-auth both fail', async () => {
+      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Network error'));
+      jest.spyOn(ezvizApi, 'authenticate').mockResolvedValueOnce(undefined);
+      const onSessionRefreshed = jest.fn();
+      ezvizApi.onSessionRefreshed = onSessionRefreshed;
+
+      await ezvizApi.refreshSession();
+
+      expect(onSessionRefreshed).not.toHaveBeenCalled();
+    });
+
+    test('API requests rotate the session through refreshSession on 401', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ alarms: [] });
+      const refreshSpy = jest.spyOn(ezvizApi, 'refreshSession').mockResolvedValueOnce(mockCredentials);
+
+      await ezvizApi.getLatestAlarm('12345');
+      const options = (sendRequest as jest.MockedFunction<typeof sendRequest>).mock.calls.at(-1)?.[6];
+      await expect(options?.onUnauthorized?.()).resolves.toBe(true);
+
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+    });
+
     test('should send PUT to the refresh endpoint with correct payload', async () => {
       const mockResponse = {
         data: {

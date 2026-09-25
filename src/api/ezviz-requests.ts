@@ -1,8 +1,7 @@
 import axios, { AxiosRequestConfig, Method, AxiosError } from 'axios';
-import querystring from 'querystring';
-import { Credentials, RefreshSession, RequestHeaders } from '../types/login.js';
+import { RequestHeaders } from '../types/login.js';
 import { EZVIZConfig } from '../types/config.js';
-import { EZVIZ_CLIENT_TYPE, EZVIZ_USER_AGENT, API_ENDPOINT_REFRESH, EZVIZ_REQUEST_TIMEOUT_MS } from './ezviz-constants.js';
+import { EZVIZ_CLIENT_TYPE, EZVIZ_USER_AGENT, EZVIZ_REQUEST_TIMEOUT_MS } from './ezviz-constants.js';
 
 /**
  * True for errors worth retrying: no response was received (timeout, DNS, connection
@@ -50,6 +49,8 @@ export async function withNetworkRetry<T>(fn: () => Promise<T>, retries: number)
  *                              networkRetries (default 0) retries transient network
  *                              errors with backoff before giving up. Leave both unset
  *                              for requests on a HomeKit-blocking read path.
+ *                              onUnauthorized is called on a 401 to rotate the session
+ *                              (resolving false if it couldn't) before retrying.
  */
 export async function sendRequest<T>(
   config: EZVIZConfig,
@@ -58,9 +59,9 @@ export async function sendRequest<T>(
   method: Method,
   data?: string,
   retries = 3,
-  options: { timeoutMs?: number; networkRetries?: number } = {},
+  options: { timeoutMs?: number; networkRetries?: number; onUnauthorized?: () => Promise<boolean> } = {},
 ): Promise<T> {
-  const { timeoutMs = EZVIZ_REQUEST_TIMEOUT_MS, networkRetries = 0 } = options;
+  const { timeoutMs = EZVIZ_REQUEST_TIMEOUT_MS, networkRetries = 0, onUnauthorized } = options;
   const credentials = config.credentials;
    
   const headers: RequestHeaders = {
@@ -85,32 +86,9 @@ export async function sendRequest<T>(
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError;
-    if (retries > 0 && axiosError.response?.status === 401) {
-      const query = querystring.stringify({
-        cuName: credentials.cuName,
-        featureCode: credentials.featureCode,
-        refreshSessionId: credentials.rfSessionId,
-      });
-
-      const refreshSession = (await sendRequest(
-        config,
-        config.domain,
-        API_ENDPOINT_REFRESH,
-        'PUT',
-        query,
-      )) as RefreshSession;
-
-      const creds: Credentials = {
-        sessionId: refreshSession.sessionInfo.sessionId,
-        rfSessionId: refreshSession.sessionInfo.refreshSessionId,
-        featureCode: credentials.featureCode,
-        cuName: credentials.cuName,
-      };
-
-      config.credentials = creds;
-      return await sendRequest(config, hostname, endpoint, method, data, retries - 1, options);
-    } else {
-      throw error;
+    if (retries > 0 && onUnauthorized && axiosError.response?.status === 401 && await onUnauthorized()) {
+      return sendRequest(config, hostname, endpoint, method, data, retries - 1, options);
     }
+    throw error;
   }
 }

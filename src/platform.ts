@@ -25,6 +25,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   public readonly discoveredCacheUUIDs: string[] = [];
   private readonly motionSensors: Map<string, CameraMotionSensor[]> = new Map();
   private mqttClient: EzvizMqttClient | null = null;
+  private mqttLifecycle: Promise<void> = Promise.resolve();
   private ezvizAPI: EZVIZAPI | null = null;
   // Latest alarm snapshot URL per device serial, used as a fast path for HomeKit
   // snapshot requests shortly after a motion event instead of a live RTSP grab.
@@ -52,22 +53,25 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
       const credentials = await this.authenticateWithRetry(ezvizAPI);
       
       if (credentials) {
-        // Refresh session every 12 hours (uses refresh token, falls back to full re-auth).
         // The MQTT push subscription is registered against the current sessionId, so it
-        // must be re-established with the new one or it silently stops receiving pushes
-        // while the socket itself stays connected.
+        // must be re-established after every rotation — the 12h refresh below or a 401
+        // mid-request — or it silently stops receiving pushes while the socket stays up.
+        ezvizAPI.onSessionRefreshed = () => {
+          void this.restartMqtt(ezvizAPI);
+        };
+
+        // Refresh session every 12 hours (uses refresh token, falls back to full re-auth).
         setInterval(async () => {
           this.log.debug('Refreshing EZVIZ session');
           try {
             await ezvizAPI.refreshSession();
-            await this.restartMqtt(ezvizAPI);
           } catch (error) {
             this.log.error('Session refresh failed:', error);
           }
         }, 3600000 * 12);
-        
+
         await this.discoverDevices(ezvizAPI);
-        await this.startMqtt(ezvizAPI);
+        await this.restartMqtt(ezvizAPI);
       } else {
         this.log.error('Could not authenticate with EZVIZ API. Please check your credentials.');
       }
@@ -321,12 +325,16 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
    * since the push subscription is registered against the sessionId active at connect
    * time — see startMqtt.
    */
-  private async restartMqtt(ezvizAPI: EZVIZAPI): Promise<void> {
-    if (this.mqttClient) {
-      this.mqttClient.stop();
-      this.mqttClient = null;
-    }
-    await this.startMqtt(ezvizAPI);
+  private restartMqtt(ezvizAPI: EZVIZAPI): Promise<void> {
+    // Serialized so overlapping restarts can't each create a client and leak one.
+    this.mqttLifecycle = this.mqttLifecycle.then(async () => {
+      if (this.mqttClient) {
+        this.mqttClient.stop();
+        this.mqttClient = null;
+      }
+      await this.startMqtt(ezvizAPI);
+    });
+    return this.mqttLifecycle;
   }
 
   private async startMqtt(ezvizAPI: EZVIZAPI): Promise<void> {

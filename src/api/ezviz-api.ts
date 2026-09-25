@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig } from 'axios';
+import axios, { AxiosRequestConfig, Method } from 'axios';
 import querystring from 'querystring';
 import crypto, { randomBytes } from 'crypto';
 import { Logging } from 'homebridge';
@@ -37,6 +37,11 @@ export class EZVIZAPI {
   private log: Logging | undefined;
   private deviceListCache: { data: ListDevicesResponse; expiresAt: number } | null = null;
   private deviceListInFlight: Promise<ListDevicesResponse> | null = null;
+  private refreshInFlight: Promise<Credentials | undefined> | null = null;
+  // Invoked after every successful session rotation, including ones triggered by a 401
+  // mid-request, so anything bound to the old sessionId (the MQTT push subscription)
+  // can re-establish itself.
+  public onSessionRefreshed?: () => void;
 
   constructor(config: EZVIZConfig, log?: Logging) {
     this.config = config;
@@ -129,10 +134,27 @@ export class EZVIZAPI {
 
   /**
    * Refreshes the session using the refresh token, falling back to full re-authentication
-   * if the refresh token is missing or rejected.
+   * if the refresh token is missing or rejected. Concurrent callers (e.g. several requests
+   * hitting 401 at once) share a single refresh.
    * @returns Promise resolving to updated credentials or undefined on failure
    */
-  async refreshSession(): Promise<Credentials | undefined> {
+  refreshSession(): Promise<Credentials | undefined> {
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.doRefreshSession()
+        .then((credentials) => {
+          if (credentials) {
+            this.onSessionRefreshed?.();
+          }
+          return credentials;
+        })
+        .finally(() => {
+          this.refreshInFlight = null;
+        });
+    }
+    return this.refreshInFlight;
+  }
+
+  private async doRefreshSession(): Promise<Credentials | undefined> {
     const creds = this.config.credentials;
 
     if (!creds?.rfSessionId) {
@@ -226,21 +248,30 @@ export class EZVIZAPI {
     }
   }
 
+  private request<T>(
+    endpoint: string,
+    method: Method,
+    data?: string,
+    options: { timeoutMs?: number; networkRetries?: number } = {},
+  ): Promise<T> {
+    return sendRequest<T>(this.config, this.config.domain, endpoint, method, data, 3, {
+      ...options,
+      onUnauthorized: async () => Boolean(await this.refreshSession()),
+    });
+  }
+
   /**
    * Returns the MQTT push address from the server info endpoint.
    * Used to connect the MQTT client for real-time push notifications.
    */
   async getServiceUrls(): Promise<string | null> {
     try {
-      const response = await sendRequest(
-        this.config,
-        this.config.domain,
+      const response = await this.request<Record<string, unknown>>(
         EZVIZ_SERVER_INFO_ENDPOINT,
         'GET',
         undefined,
-        3,
         { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
-      ) as Record<string, unknown>;
+      );
       const sysConfig = response?.systemConfigInfo as Record<string, unknown> | undefined;
       const pushAddr = (sysConfig?.pushAddr as string) ?? null;
       if (pushAddr && this.config.credentials) {
@@ -307,15 +338,12 @@ export class EZVIZAPI {
         offset: 0,
       });
 
-      const info = await sendRequest(
-        this.config,
-        this.config.domain,
+      const info = await this.request<ListDevicesResponse>(
         `${EZVIZ_DEVICES_ENDPOINT}?${query}`,
         'GET',
         undefined,
-        3,
         { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
-      ) as ListDevicesResponse;
+      );
       this.deviceListCache = { data: info, expiresAt: Date.now() + DEVICE_LIST_CACHE_TTL_MS };
       return info;
     } catch (error) {
@@ -356,15 +384,12 @@ export class EZVIZAPI {
         stype: -1,
       });
 
-      const response = await sendRequest(
-        this.config,
-        this.config.domain,
+      const response = await this.request<{ alarms?: Array<{ alarmStartTime?: number; picUrl?: string }> }>(
         `${EZVIZ_ALARMINFO_ENDPOINT}?${query}`,
         'GET',
         undefined,
-        3,
         { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
-      ) as { alarms?: Array<{ alarmStartTime?: number; picUrl?: string }> };
+      );
 
       const latest = response?.alarms?.[0];
       if (!latest?.alarmStartTime) {
@@ -563,15 +588,12 @@ export class EZVIZAPI {
     };
 
     try {
-      const response = await sendRequest(
-        this.config,
-        this.config.domain,
+      const response = await this.request<DefenceModeResponse>(
         `${EZVIZ_DEFENCE_MODE_GET_ENDPOINT}?${query}`,
         'GET',
         undefined,
-        3,
         { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
-      ) as DefenceModeResponse;
+      );
 
       if (response?.retcode && response.retcode !== '200') {
         throw new Error(`Failed to get defence mode: ${response.retcode}`);

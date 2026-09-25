@@ -11,6 +11,7 @@ describe('sendRequest', () => {
   let mockCredentials: Credentials;
 
   beforeEach(() => {
+    (axios as jest.MockedFunction<typeof axios>).mockReset();
     mockCredentials = {
       sessionId: 'mockSessionId',
       rfSessionId: 'mockRfSessionId',
@@ -48,31 +49,45 @@ describe('sendRequest', () => {
     }));
   });
 
-  test('should retry request on 401 error and refresh session', async () => {
-    const mock401Error = {
-      response: {
-        status: 401,
-      },
-    };
-    const mockRefreshResponse = {
-      data: {
-        sessionInfo: {
-          sessionId: 'newSessionId',
-          refreshSessionId: 'newRfSessionId',
-        },
-      },
-    };
+  test('on 401, rotates the session via onUnauthorized and retries with the new sessionId', async () => {
     const mockSuccessResponse = { data: { success: true } };
-
     (axios as jest.MockedFunction<typeof axios>)
-      .mockRejectedValueOnce(mock401Error)
-      .mockResolvedValueOnce(mockRefreshResponse)
+      .mockRejectedValueOnce({ response: { status: 401 } })
       .mockResolvedValueOnce(mockSuccessResponse);
+    const onUnauthorized = jest.fn(async () => {
+      mockConfig.credentials = { ...mockCredentials, sessionId: 'newSessionId' };
+      return true;
+    });
 
-    const result = await sendRequest(mockConfig, 'https://test.ezviz.com', API_ENDPOINT_REFRESH, 'GET');
+    const result = await sendRequest(mockConfig, 'https://test.ezviz.com', '/test', 'GET', undefined, 3, { onUnauthorized });
+
     expect(result).toEqual(mockSuccessResponse.data);
-    expect(axios).toHaveBeenCalledTimes(4);
-    expect(mockConfig.credentials.sessionId).toBe('newSessionId');
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(axios).toHaveBeenCalledTimes(2);
+    expect((axios as jest.MockedFunction<typeof axios>).mock.calls[1][0]).toEqual(expect.objectContaining({
+      headers: expect.objectContaining({ sessionId: 'newSessionId' }),
+    }));
+  });
+
+  test('on 401, gives up without retrying when the session could not be rotated', async () => {
+    const error401 = { response: { status: 401 } };
+    (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(error401);
+    const onUnauthorized = jest.fn(async () => false);
+
+    await expect(sendRequest(mockConfig, 'https://test.ezviz.com', '/test', 'GET', undefined, 3, { onUnauthorized }))
+      .rejects.toBe(error401);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(axios).toHaveBeenCalledTimes(1);
+  });
+
+  test('on persistent 401, stops after the retry budget instead of looping', async () => {
+    (axios as jest.MockedFunction<typeof axios>).mockRejectedValue({ response: { status: 401 } });
+    const onUnauthorized = jest.fn(async () => true);
+
+    await expect(sendRequest(mockConfig, 'https://test.ezviz.com', '/test', 'GET', undefined, 2, { onUnauthorized }))
+      .rejects.toEqual({ response: { status: 401 } });
+    expect(onUnauthorized).toHaveBeenCalledTimes(2);
+    expect(axios).toHaveBeenCalledTimes(3);
   });
 
   test('should throw error if request fails without retries', async () => {
