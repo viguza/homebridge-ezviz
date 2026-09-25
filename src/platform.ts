@@ -4,6 +4,7 @@ import { IPCamera } from './accessories/ip-camera.js';
 import { SecuritySystemAccessory } from './accessories/security-system.js';
 import { CameraMotionSensor } from './accessories/camera-motion-sensor.js';
 import { EzvizMqttClient } from './utils/mqtt-client.js';
+import { checkFfmpegAvailability } from './utils/ffmpeg.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { EZVIZAPI } from './api/ezviz-api.js';
 import { isRetryableError } from './api/ezviz-requests.js';
@@ -47,6 +48,10 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
    * Handles authentication and device discovery
    */
   async didFinishLaunching(): Promise<void> {
+    if (this.config.cameras?.length) {
+      void checkFfmpegAvailability(this.log);
+    }
+
     try {
       const ezvizAPI = new EZVIZAPI(this.config, this.log);
       this.ezvizAPI = ezvizAPI;

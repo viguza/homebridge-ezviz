@@ -3,8 +3,40 @@ jest.mock('execa', () => jest.fn());
 import { EventEmitter } from 'events';
 import execa from 'execa';
 import { Logging } from 'homebridge';
-import { FfmpegProcess, getSnapshot } from '../../src/utils/ffmpeg';
+import { checkFfmpegAvailability, FfmpegProcess, getSnapshot } from '../../src/utils/ffmpeg';
 import { StreamingDelegate } from '../../src/utils/streaming-delegate';
+
+describe('checkFfmpegAvailability', () => {
+  const createLog = () => ({ warn: jest.fn(), error: jest.fn() }) as unknown as Logging;
+
+  beforeEach(() => {
+    (execa as unknown as jest.Mock).mockReset();
+  });
+
+  test('stays quiet when the bundled ffmpeg is present', async () => {
+    const log = createLog();
+    await checkFfmpegAvailability(log, '/path/to/bundled/ffmpeg');
+    expect(log.warn).not.toHaveBeenCalled();
+    expect(log.error).not.toHaveBeenCalled();
+    expect(execa).not.toHaveBeenCalled();
+  });
+
+  test('warns about the system-ffmpeg fallback when the bundled one is missing', async () => {
+    (execa as unknown as jest.Mock).mockResolvedValue({ stdout: '' });
+    const log = createLog();
+    await checkFfmpegAvailability(log, null);
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('--allow-scripts=ffmpeg-for-homebridge'));
+    expect(log.error).not.toHaveBeenCalled();
+  });
+
+  test('logs an error with the fix when no ffmpeg is available at all', async () => {
+    (execa as unknown as jest.Mock).mockRejectedValue(new Error('spawn ffmpeg ENOENT'));
+    const log = createLog();
+    await checkFfmpegAvailability(log, null);
+    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Live view, snapshots and recording will not work'));
+    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--allow-scripts=ffmpeg-for-homebridge'));
+  });
+});
 
 describe('FfmpegProcess', () => {
   test('redacts RTSP credentials from ffmpeg stderr in logs and in the error passed to HomeKit', () => {

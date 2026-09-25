@@ -19,6 +19,29 @@ export async function isFfmpegInstalled(ffmpegPath: string): Promise<boolean> {
   }
 }
 
+/**
+ * ffmpeg-for-homebridge downloads its binary in an npm install script, which newer npm
+ * versions skip unless the install is approved. Without it, every camera feature fails
+ * with low-level errors, so explain the fallback (or the fix) once at startup instead.
+ */
+export async function checkFfmpegAvailability(
+  log: Logging,
+  bundledPath: string | null = (pathToFfmpeg as unknown as string | undefined) ?? null,
+): Promise<void> {
+  if (bundledPath) {
+    return;
+  }
+  const missing = 'The bundled ffmpeg from ffmpeg-for-homebridge is missing (npm may have skipped its install script)';
+  const fix = 'To get the bundled ffmpeg, reinstall the plugin with install scripts allowed ' +
+    '(npm install @viguza/homebridge-ezviz --allow-scripts=ffmpeg-for-homebridge), ' +
+    'or install ffmpeg on this system.';
+  if (await isFfmpegInstalled('ffmpeg')) {
+    log.warn(`${missing}, so the system ffmpeg is being used. ${fix}`);
+  } else {
+    log.error(`${missing} and there is no ffmpeg on this system. Live view, snapshots and recording will not work. ${fix}`);
+  }
+}
+
 // HomeKit abandons a snapshot request that takes too long and retries it, so an
 // unbounded ffmpeg grab (e.g. a flaky RTSP connection that hangs) can leave a stale
 // attempt to eventually resolve alongside a fresher retry, delivering the image twice.
