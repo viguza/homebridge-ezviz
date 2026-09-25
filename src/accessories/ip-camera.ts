@@ -8,13 +8,13 @@ import {
 } from 'homebridge';
 import { StreamingDelegate } from '../utils/streaming-delegate.js';
 import { HksvRecordingDelegate } from '../utils/hksv-recording-delegate.js';
+import { HKSV_PREBUFFER_LENGTH_MS } from '../utils/hksv-prebuffer.js';
 import { getCameraLocalIp, getRtspUrl } from '../utils/rtsp-url.js';
 import type { EZVIZPlatform } from '../platform.js';
 import { EZVIZAPI } from '../api/ezviz-api.js';
 import { SwitchTypes } from '../utils/enums.js';
 
 const STATE_REFRESH_INTERVAL_MS = 60_000;
-const HKSV_PREBUFFER_LENGTH_MS = 4000;
 
 /**
  * IP Camera accessory for EZVIZ devices

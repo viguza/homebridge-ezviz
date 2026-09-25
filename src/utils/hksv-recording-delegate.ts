@@ -12,10 +12,8 @@ import {
 } from 'homebridge';
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
 import { parseMp4Boxes } from './mp4-parser.js';
-import { HksvPrebuffer } from './hksv-prebuffer.js';
+import { HKSV_PREBUFFER_LENGTH_MS, HksvPrebuffer } from './hksv-prebuffer.js';
 import { redactCredentials } from './sanitize.js';
-
-const DEFAULT_PREBUFFER_LENGTH_MS = 4000;
 
 function sampleRateHz(rate: AudioRecordingSamplerate): number {
   switch (rate) {
@@ -131,7 +129,7 @@ export class HksvRecordingDelegate implements CameraRecordingDelegate {
 
     const includeAudio = this.getRecordingAudioActive();
     const input = this.active
-      ? await this.prebuffer.getRecordingInput(configuration.prebufferLength ?? DEFAULT_PREBUFFER_LENGTH_MS)
+      ? await this.prebuffer.getRecordingInput(configuration.prebufferLength ?? HKSV_PREBUFFER_LENGTH_MS)
       : ['-rtsp_transport', 'tcp', '-i', this.rtspUrl];
 
     const videoProcessor = (pathToFfmpeg as unknown as string) || 'ffmpeg';

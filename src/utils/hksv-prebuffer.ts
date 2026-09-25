@@ -6,7 +6,8 @@ import pathToFfmpeg from 'ffmpeg-for-homebridge';
 import { Mp4Box, parseMp4Boxes } from './mp4-parser.js';
 import { redactCredentials } from './sanitize.js';
 
-const PREBUFFER_DURATION_MS = 4000;
+// How much pre-roll HomeKit is told we keep, and how much we actually buffer.
+export const HKSV_PREBUFFER_LENGTH_MS = 4000;
 // A splice server that nobody ever connects to (e.g. HomeKit gave up before the
 // recording ffmpeg process reached it) would otherwise listen forever.
 const SPLICE_SERVER_TIMEOUT_MS = 60_000;
@@ -215,7 +216,7 @@ export class HksvPrebuffer {
         this.moov = box;
       } else {
         this.boxes.push({ box, time: now });
-        while (this.boxes.length && this.boxes[0].time < now - PREBUFFER_DURATION_MS) {
+        while (this.boxes.length && this.boxes[0].time < now - HKSV_PREBUFFER_LENGTH_MS) {
           this.boxes.shift();
         }
         this.events.emit('box', box);
