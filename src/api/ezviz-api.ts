@@ -28,6 +28,41 @@ import {
 import { DefenceMode } from '../utils/enums.js';
 import { sendRequest } from './ezviz-requests.js';
 
+const DEVICE_LIST_PAGE_SIZE = 30;
+// Safety bound in case the API keeps reporting another page.
+const DEVICE_LIST_MAX_PAGES = 10;
+
+function hasNextPage(response: ListDevicesResponse): boolean {
+  // Accept either casing: the typed shape uses Page.HasNext, but it isn't verified
+  // against every region's API.
+  const page = (response?.Page ?? (response as unknown as { page?: Record<string, unknown> })?.page) as
+    Record<string, unknown> | undefined;
+  return Boolean(page?.HasNext ?? page?.hasNext);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Combines consecutive device-list pages: list fields are concatenated and the
+ * per-serial maps (CONNECTION, SWITCH, ...) are merged.
+ */
+function mergeDeviceListPages(a: ListDevicesResponse, b: ListDevicesResponse): ListDevicesResponse {
+  const merged: Record<string, unknown> = { ...a };
+  for (const [key, value] of Object.entries(b ?? {})) {
+    const existing = merged[key];
+    if (Array.isArray(existing) && Array.isArray(value)) {
+      merged[key] = [...existing, ...value];
+    } else if (key !== 'Page' && key !== 'page' && key !== 'meta' && isPlainObject(existing) && isPlainObject(value)) {
+      merged[key] = { ...existing, ...value };
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged as unknown as ListDevicesResponse;
+}
+
 /**
  * EZVIZ API client for interacting with EZVIZ services
  */
@@ -351,20 +386,31 @@ export class EZVIZAPI {
 
   private async fetchDeviceList(): Promise<ListDevicesResponse> {
     try {
-      const query = querystring.stringify({
-        filter: 'CONNECTION,WIFI,SWITCH,STATUS,NODISTURB,P2P,FEATURE,DETECTOR',
-        groupId: DEFAULT_GROUP_ID,
-        limit: 30,
-        offset: 0,
-      });
+      let merged: ListDevicesResponse | null = null;
+      let offset = 0;
+      for (let page = 0; page < DEVICE_LIST_MAX_PAGES; page++) {
+        const query = querystring.stringify({
+          filter: 'CONNECTION,WIFI,SWITCH,STATUS,NODISTURB,P2P,FEATURE,DETECTOR',
+          groupId: DEFAULT_GROUP_ID,
+          limit: DEVICE_LIST_PAGE_SIZE,
+          offset,
+        });
 
-      const info = await this.request<ListDevicesResponse>(
-        `${EZVIZ_DEVICES_ENDPOINT}?${query}`,
-        'GET',
-        undefined,
-        { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
-      );
-      return info;
+        const info = await this.request<ListDevicesResponse>(
+          `${EZVIZ_DEVICES_ENDPOINT}?${query}`,
+          'GET',
+          undefined,
+          { timeoutMs: EZVIZ_BACKGROUND_REQUEST_TIMEOUT_MS, networkRetries: 2 },
+        );
+        merged = merged ? mergeDeviceListPages(merged, info) : info;
+
+        const received = info?.deviceInfos?.length ?? 0;
+        if (!hasNextPage(info) || received === 0) {
+          break;
+        }
+        offset += received;
+      }
+      return merged as ListDevicesResponse;
     } catch (error) {
       this.log?.error('Error fetching devices:', error);
       throw error;

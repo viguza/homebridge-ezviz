@@ -713,6 +713,29 @@ describe('EZVIZAPI', () => {
       expect(sendRequest).toHaveBeenCalledTimes(2);
     });
 
+    test('fetches and merges every page of the device list', async () => {
+      const sendRequestMock = sendRequest as jest.MockedFunction<typeof sendRequest>;
+      sendRequestMock.mockReset();
+      sendRequestMock
+        .mockResolvedValueOnce({
+          deviceInfos: [{ deviceSerial: 'A' }, { deviceSerial: 'B' }],
+          SWITCH: { A: [], B: [] },
+          Page: { Offset: 0, Limit: 2, TotalResults: 3, HasNext: true },
+        })
+        .mockResolvedValueOnce({
+          deviceInfos: [{ deviceSerial: 'C' }],
+          SWITCH: { C: [] },
+          Page: { Offset: 2, Limit: 2, TotalResults: 3, HasNext: false },
+        });
+
+      const result = await ezvizApi.listDevices(true);
+
+      expect(result?.deviceInfos.map((d) => d.deviceSerial)).toEqual(['A', 'B', 'C']);
+      expect(Object.keys(result?.SWITCH ?? {})).toEqual(['A', 'B', 'C']);
+      expect(sendRequestMock).toHaveBeenCalledTimes(2);
+      expect(sendRequestMock.mock.calls[1][2]).toContain('offset=2');
+    });
+
     test('a list fetch that was in flight during a write neither returns nor caches its stale result', async () => {
       const stale = { deviceInfos: [], SWITCH: { '12345': [{ type: 14, enable: false }] } };
       const fresh = { deviceInfos: [], SWITCH: { '12345': [{ type: 14, enable: true }] } };
