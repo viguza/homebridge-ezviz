@@ -423,33 +423,22 @@ export class EZVIZAPI {
       }
     }
 
-    const config: AxiosRequestConfig = {
-      method: 'post',
-      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
-      url: `${this.config.domain}${EZVIZ_SWITCH_STATUS_ENDPOINT}`,
-      headers: {
-        'sessionid': this.sessionId,
-        'clienttype': EZVIZ_CLIENT_TYPE,
-        'user-agent': EZVIZ_USER_AGENT,
-      },
-      data: querystring.stringify({
-        channel: 0,
-        clientType: 1,
-        enable: value ? 1 : 0,
-        serial: serialNumber,
-        type: type,
-      }),
-    };
+    const data = querystring.stringify({
+      channel: 0,
+      clientType: 1,
+      enable: value ? 1 : 0,
+      serial: serialNumber,
+      type: type,
+    });
 
     try {
-      const response = await axios(config);
-      
-      if (response.data?.retcode) {
-        throw new Error(`Switch state update failed: ${response.data.retcode}`);
+      const response = await this.request<{ retcode?: number | string }>(EZVIZ_SWITCH_STATUS_ENDPOINT, 'POST', data);
+
+      if (response?.retcode) {
+        throw new Error(`Switch state update failed: ${response.retcode}`);
       }
-      
+
       this.invalidateDeviceListCache();
-      return response.data;
     } catch (error) {
       this.log?.error('Error setting switch state:', error);
       throw error;
@@ -531,29 +520,19 @@ export class EZVIZAPI {
       mode: mode,
     });
 
-    const config: AxiosRequestConfig = {
-      method: 'post',
-      timeout: EZVIZ_REQUEST_TIMEOUT_MS,
-      url: `${this.config.domain}${EZVIZ_DEFENCE_MODE_ENDPOINT}?${query}`,
-      headers: {
-        'sessionid': this.sessionId,
-        'clienttype': EZVIZ_CLIENT_TYPE,
-        'user-agent': EZVIZ_USER_AGENT,
-      },
-    };
-
     try {
-      const response = await axios(config);
+      const response = await this.request<{ retcode?: string; meta?: { code?: number; message?: string } }>(
+        `${EZVIZ_DEFENCE_MODE_ENDPOINT}?${query}`,
+        'POST',
+      );
 
-      if (response.data?.retcode && response.data.retcode !== '200') {
-        throw new Error(`Defence mode update failed: ${response.data.retcode}`);
+      if (response?.retcode && response.retcode !== '200') {
+        throw new Error(`Defence mode update failed: ${response.retcode}`);
       }
 
-      if (response.data?.meta?.code && response.data.meta.code !== 200) {
-        throw new Error(`Defence mode update failed: ${response.data.meta.code} - ${response.data.meta.message}`);
+      if (response?.meta?.code && response.meta.code !== 200) {
+        throw new Error(`Defence mode update failed: ${response.meta.code} - ${response.meta.message}`);
       }
-
-      return response.data;
     } catch (error) {
       this.log?.error('Error setting defence mode:', error);
       throw error;

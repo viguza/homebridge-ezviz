@@ -430,19 +430,32 @@ describe('EZVIZAPI', () => {
     });
 
     test('setSwitchState should send request', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValue({ data: {} });
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValue({});
       await ezvizApi.setSwitchState('12345', 14, true);
-      expect(axios).toHaveBeenCalled();
+      expect(sendRequest).toHaveBeenCalled();
     });
 
     test('should log error if set switch fails', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Set switch state failed'));
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockRejectedValueOnce(new Error('Set switch state failed'));
       await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Set switch state failed');
       expect(mockLog.error).toHaveBeenCalledWith('Error setting switch state:', expect.any(Error));
     });
 
     test('should throw error if serialNumber is missing', async () => {
       await expect(ezvizApi.setSwitchState(undefined as unknown as string, 14, true)).rejects.toThrow('Serial number is required');
+    });
+
+    test('uses the current session and retries through refreshSession on 401', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({});
+      const refreshSpy = jest.spyOn(ezvizApi, 'refreshSession').mockResolvedValueOnce(mockCredentials);
+
+      await ezvizApi.setSwitchState('12345', 14, true);
+      const call = (sendRequest as jest.MockedFunction<typeof sendRequest>).mock.calls.at(-1);
+      expect(call?.[0]).toBe(mockConfig);
+      expect(call?.[3]).toBe('POST');
+      await call?.[6]?.onUnauthorized?.();
+
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
     });
 
     test('should log error and throw if authentication fails', async () => {
@@ -453,7 +466,7 @@ describe('EZVIZAPI', () => {
     });
 
     test('should throw error if switch state update fails with retcode', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { retcode: 999 } });
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ retcode: 999 });
       await expect(ezvizApi.setSwitchState('12345', 14, true)).rejects.toThrow('Switch state update failed: 999');
     });
   });
@@ -514,9 +527,22 @@ describe('EZVIZAPI', () => {
     });
 
     test('should send request on success', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValue({ data: {} });
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValue({});
       await ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE);
-      expect(axios).toHaveBeenCalled();
+      expect(sendRequest).toHaveBeenCalled();
+    });
+
+    test('uses the current session and retries through refreshSession on 401', async () => {
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({});
+      const refreshSpy = jest.spyOn(ezvizApi, 'refreshSession').mockResolvedValueOnce(mockCredentials);
+
+      await ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE);
+      const call = (sendRequest as jest.MockedFunction<typeof sendRequest>).mock.calls.at(-1);
+      expect(call?.[0]).toBe(mockConfig);
+      expect(call?.[3]).toBe('POST');
+      await call?.[6]?.onUnauthorized?.();
+
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
     });
 
     test('should throw error for an invalid defence mode value', async () => {
@@ -531,19 +557,19 @@ describe('EZVIZAPI', () => {
     });
 
     test('should throw error if update fails with retcode', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: { retcode: '999' } });
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({ retcode: '999' });
       await expect(ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE)).rejects.toThrow('Defence mode update failed: 999');
     });
 
     test('should throw error if update fails with meta.code', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({
-        data: { meta: { code: 500, message: 'Server error' } },
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockResolvedValueOnce({
+        meta: { code: 500, message: 'Server error' },
       });
       await expect(ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE)).rejects.toThrow('Defence mode update failed: 500 - Server error');
     });
 
     test('should log error if request fails', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockRejectedValueOnce(new Error('Network fail'));
+      (sendRequest as jest.MockedFunction<typeof sendRequest>).mockRejectedValueOnce(new Error('Network fail'));
       await expect(ezvizApi.setDefenceMode(1, DefenceMode.AWAY_MODE)).rejects.toThrow('Network fail');
       expect(mockLog.error).toHaveBeenCalledWith('Error setting defence mode:', expect.any(Error));
     });
@@ -671,12 +697,13 @@ describe('EZVIZAPI', () => {
     });
 
     test('should invalidate the cache after a switch write', async () => {
-      (axios as jest.MockedFunction<typeof axios>).mockResolvedValueOnce({ data: {} });
       await ezvizApi.listDevices();
       await ezvizApi.setSwitchState('12345', 14, true);
       await ezvizApi.listDevices();
 
-      expect(sendRequest).toHaveBeenCalledTimes(2);
+      const deviceListCalls = (sendRequest as jest.MockedFunction<typeof sendRequest>).mock.calls
+        .filter(([, , endpoint]) => endpoint.startsWith('/v3/userdevices/v1/resources/pagelist'));
+      expect(deviceListCalls).toHaveLength(2);
     });
   });
 
