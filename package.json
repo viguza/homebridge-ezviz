@@ -57,14 +57,10 @@
   },
   "dependencies": {
     "axios": "^1.7.9",
-    "crypto": "^1.0.1",
     "execa": "^5.1.1",
     "ffmpeg-for-homebridge": "^2.1.7",
     "get-port": "^7.1.0",
-    "homebridge-lib": "^7.1.0",
-    "mqtt": "^5.15.1",
-    "pick-port": "^2.1.0",
-    "querystring": "^0.2.1"
+    "mqtt": "^5.15.1"
   },
   "allowScripts": {
     "ffmpeg-for-homebridge": true
