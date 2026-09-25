@@ -9,10 +9,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Node 26 isn't in "engines" yet; it's tested early so problems show up before
+    # users upgrade, without failing the workflow.
+    continue-on-error: ${{ matrix.experimental }}
+
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18.x, 20.x, 22.x, 24.x]
+        node-version: [22.x, 24.x]
+        experimental: [false]
+        include:
+          - node-version: 26.x
+            experimental: true
 
     steps:
       - uses: actions/checkout@v4

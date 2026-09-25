@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nothing yet
 
 ### Removed
-- Nothing yet
+- **Node.js 18 and 20 are no longer supported**, since both have reached end of life. The plugin now requires Node.js 22 or 24, matching Homebridge's own supported versions. If you can't upgrade Node.js yet, stay on 2.0.3
+- Homebridge 2.0 beta versions are no longer listed as supported; use Homebridge 1.8+ or the 2.0 release
 
 ## [2.0.3] - 2026-09-24
 

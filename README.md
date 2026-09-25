@@ -31,7 +31,7 @@ A Homebridge plugin for integrating EZVIZ devices into Apple HomeKit. This plugi
 ## Prerequisites
 
 - [Homebridge](https://homebridge.io/) v1.8.0 or higher
-- Node.js v18, v20, v22, or v24
+- Node.js v22 or v24
 - EZVIZ account with registered devices
 - Network access to your EZVIZ devices
 
