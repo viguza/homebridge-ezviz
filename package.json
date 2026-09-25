@@ -65,5 +65,8 @@
     "mqtt": "^5.15.1",
     "pick-port": "^2.1.0",
     "querystring": "^0.2.1"
+  },
+  "allowScripts": {
+    "ffmpeg-for-homebridge": true
   }
 }
