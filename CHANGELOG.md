@@ -19,6 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Nothing yet
 
+## [2.0.3] - 2026-09-24
+
+### Security
+- Camera credentials no longer leak into the Homebridge log. Snapshot timeouts, live-view ffmpeg output (including ffmpeg's own error and banner lines) and ffmpeg start failures printed the full RTSP URL with the camera's username and verification code. They're now masked as `rtsp://***:***@...`, including for verification codes containing characters like `@` or `/`
+
+### Fixed
+- MQTT real-time push still died after the first 12h session refresh: the refreshed credentials dropped the EZVIZ username, so the reconnect added in 2.0.2 was skipped and motion silently fell back to the 30s poll. The username is now kept, and MQTT also reconnects when the session is renewed mid-cycle after EZVIZ rejects it
+- Plug, camera privacy and alarm-mode changes failed with "communication failure" after EZVIZ invalidated the session mid-cycle, until the next 12h refresh. They now renew the session and retry like other requests
+- A session renewal that EZVIZ kept rejecting could produce an endless chain of retry requests
+- HomeKit Secure Video: when two recordings overlapped, closing the first one stopped the wrong ffmpeg process and left the old one running against the camera. This caused "Recording download stream is still awaiting generator" warnings and could use up the camera's RTSP connections, making later snapshots time out. An ffmpeg process that ignored the stop signal also could never be force-stopped
+- HomeKit Secure Video: if the background prebuffer's ffmpeg died (e.g. a WiFi drop or camera reboot), recordings lost their pre-roll until restart and could fail to decode. It now restarts automatically with a clean buffer
+- HomeKit Secure Video: an unexpected error on the prebuffer's local connection could crash Homebridge, and an unusual video stream could make a recording hang silently
+- Verification codes containing special characters (such as `@`, `/` or `#`) produced an invalid RTSP URL
+- Live view crashed for cameras that EZVIZ reports without a switch list
+- A camera that was offline when Homebridge started was left half set up. It now gets a working camera accessory and a log warning explaining that video will work once it's back online and Homebridge is restarted
+- Accounts with more than 30 devices only saw the first 30. Devices past that point were also removed from HomeKit if their position in the list changed
+- Toggling a plug or camera privacy right as a background refresh was running could make HomeKit show the old state for up to a minute
+- An alarm mode reported as `0` (unset) could be misread as another mode
+- Dual-lens cameras made two identical alarm-history requests every 30 seconds instead of one
+
 ## [2.0.2] - 2026-09-24
 
 ### Fixed

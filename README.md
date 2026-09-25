@@ -124,7 +124,7 @@ Add the following to your Homebridge `config.json` file:
 | `serial` | string | Yes | Camera serial number |
 | `username` | string | Yes | Camera username (usually "admin") |
 | `code` | string | Yes | Camera verification code |
-| `dualCamera` | boolean | No | Enable for devices with two physical lenses (e.g. H9c) |
+| `dualCamera` | boolean | No | Enable for devices with two physical lenses (e.g. H9c). Each lens gets its own camera accessory; the "Camera Off" (privacy) control applies to the whole device, not a single lens |
 
 ### Smart Plug Configuration
 
@@ -164,6 +164,10 @@ For a complete list of all supported region codes, see [config.schema.json](conf
 - Check that Video & Picture Encryption is enabled
 - Verify camera credentials are correct
 - Check network connectivity
+- If the log warns that EZVIZ reported no local IP address for the camera, it was offline when Homebridge started. Bring it back online and restart Homebridge
+
+#### Motion Is Detected Late
+Motion normally arrives in real time over EZVIZ's MQTT push service, with a 30-second poll as a fallback. Look for `MQTT push connected — real-time alerts active` in the log at startup. If it's missing, or the motion log lines show `(poll)` instead of `(MQTT)`, only the fallback is working; enable Debug mode and check the `MQTT` log lines to see why
 
 #### Smart Plug Not Responding
 - Verify the verification code is correct
@@ -191,7 +195,7 @@ Enable debug mode for detailed logging:
 3. Create a new issue with:
    - Device information
    - Configuration (without credentials)
-   - Error logs
+   - Error logs (camera usernames and verification codes in RTSP URLs are masked as `***:***` in the plugin's logs, but still review logs before sharing them)
    - Steps to reproduce
 
 ## API Documentation
