@@ -230,11 +230,7 @@ npm test
 
 ### Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and pull request process, and [SECURITY.md](SECURITY.md) to report a vulnerability privately. This project follows a [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Changelog
 
