@@ -16,11 +16,16 @@ interface TimedBox {
   time: number;
 }
 
-function listenOnEphemeralPort(server: Server): Promise<number> {
+/**
+ * `onError` stays attached for the server's lifetime: a net.Server 'error' with no
+ * listener (e.g. accept() failing with EMFILE) is thrown and would crash Homebridge.
+ */
+function listenOnEphemeralPort(server: Server, onError: (error: Error) => void): Promise<number> {
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', () => {
       server.removeListener('error', reject);
+      server.on('error', onError);
       const address = server.address();
       if (address && typeof address === 'object') {
         resolve(address.port);
@@ -124,7 +129,9 @@ export class HksvPrebuffer {
       socket.once('error', cleanup);
     });
 
-    const port = await listenOnEphemeralPort(server);
+    const port = await listenOnEphemeralPort(server, (error) => {
+      this.log.debug(`HKSV splice server for ${this.cameraName} error: ${error.message}`);
+    });
     setTimeout(() => server.close(), SPLICE_SERVER_TIMEOUT_MS);
 
     return ['-f', 'mp4', '-i', `tcp://127.0.0.1:${port}`];
@@ -137,7 +144,9 @@ export class HksvPrebuffer {
         this.log.debug(`HKSV prebuffer for ${this.cameraName} ended: ${(error as Error).message}`);
       });
     });
-    const port = await listenOnEphemeralPort(server);
+    const port = await listenOnEphemeralPort(server, (error) => {
+      this.log.debug(`HKSV prebuffer server for ${this.cameraName} error: ${error.message}`);
+    });
     this.server = server;
 
     const videoProcessor = (pathToFfmpeg as unknown as string) || 'ffmpeg';
