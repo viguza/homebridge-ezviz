@@ -20,6 +20,16 @@ async function collect<T>(iterable: AsyncGenerator<T>, count: number): Promise<T
 }
 
 describe('parseMp4Boxes', () => {
+  test.each([0, 1, 7])('fails instead of stalling on an unsupported box size of %i', async (size) => {
+    const stream = new PassThrough();
+    const header = Buffer.alloc(8);
+    header.writeUInt32BE(size, 0);
+    header.write('mdat', 4, 'latin1');
+    stream.write(header);
+
+    await expect(parseMp4Boxes(stream).next()).rejects.toThrow(`unsupported MP4 box size ${size} for 'mdat'`);
+  });
+
   test('parses a single box written all at once', async () => {
     const stream = new PassThrough();
     const payload = Buffer.from('hello');

@@ -78,8 +78,15 @@ function readExact(readable: Readable, length: number): Promise<Buffer> {
 export async function* parseMp4Boxes(readable: Readable): AsyncGenerator<Mp4Box> {
   while (true) {
     const header = await readExact(readable, 8);
-    const length = header.readUInt32BE(0) - 8;
+    const size = header.readUInt32BE(0);
     const type = header.subarray(4).toString('latin1');
+    // size 0 ("to end of stream") and 1 (64-bit extended size) aren't supported; any
+    // size < 8 would give a negative length, which read() can never satisfy, stalling
+    // the parser forever instead of failing.
+    if (size < 8) {
+      throw new Error(`unsupported MP4 box size ${size} for '${type}'`);
+    }
+    const length = size - 8;
     const data = await readExact(readable, length);
     yield { header, length, type, data };
   }
