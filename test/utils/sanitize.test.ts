@@ -14,6 +14,15 @@ describe('redactCredentials', () => {
     expect(redactCredentials(command)).not.toContain('s3cr3t');
   });
 
+  test('fully masks a password containing @', () => {
+    expect(redactCredentials('rtsp://admin:ab@cd@1.2.3.4/x')).toBe('rtsp://***:***@1.2.3.4/x');
+  });
+
+  test('fully masks a password containing /', () => {
+    const result = redactCredentials('-i rtsp://admin:ab/cd@1.2.3.4/x -f mjpeg');
+    expect(result).toBe('-i rtsp://***:***@1.2.3.4/x -f mjpeg');
+  });
+
   test('leaves a URL with no embedded credentials unchanged', () => {
     const url = 'rtsp://192.168.1.172:554/Streaming/Channels/1/';
     expect(redactCredentials(url)).toBe(url);

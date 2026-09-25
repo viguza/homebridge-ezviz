@@ -3,5 +3,7 @@
  * never end up in logs, error messages, or ffmpeg command dumps.
  */
 export function redactCredentials(text: string): string {
-  return text.replace(/:\/\/[^/\s@]+@/g, '://***:***@');
+  // Greedy up to the last '@' in the whitespace-delimited token, so a password that
+  // itself contains '@' or '/' is still fully masked; over-masking is the safe failure.
+  return text.replace(/:\/\/\S*@/g, '://***:***@');
 }

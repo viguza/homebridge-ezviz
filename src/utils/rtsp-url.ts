@@ -8,5 +8,7 @@ export function getRtspUrl(deviceData: DeviceData): string {
     : deviceData.Connection.localIp;
   const port = deviceData.Connection.localRtspPort || 554;
   const channel = deviceData.DeviceInfo.channelNumber || 1;
-  return `rtsp://${cameraConfig.username}:${cameraConfig.code}@${ip}:${port}/Streaming/Channels/${channel}/`;
+  const username = encodeURIComponent(cameraConfig.username);
+  const code = encodeURIComponent(cameraConfig.code);
+  return `rtsp://${username}:${code}@${ip}:${port}/Streaming/Channels/${channel}/`;
 }
