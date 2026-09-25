@@ -166,6 +166,15 @@ For a complete list of all supported region codes, see [config.schema.json](conf
 - Check network connectivity
 - If the log warns that EZVIZ reported no local IP address for the camera, it was offline when Homebridge started. Bring it back online and restart Homebridge
 
+#### "The bundled ffmpeg from ffmpeg-for-homebridge is missing"
+The plugin ships ffmpeg through the `ffmpeg-for-homebridge` package, which downloads it in an npm install script. Newer npm versions can skip install scripts unless they're approved, leaving the plugin without its ffmpeg. If this warning appears:
+- The plugin falls back to a system-installed `ffmpeg` if there is one (a warning). With no ffmpeg at all (an error), live view, snapshots and recording won't work
+- To restore the bundled ffmpeg, run this from your Homebridge storage folder (usually `/var/lib/homebridge`, or `~/.homebridge`), then restart Homebridge:
+  ```bash
+  npm install @viguza/homebridge-ezviz --allow-scripts=ffmpeg-for-homebridge
+  ```
+- Or install ffmpeg on the system (for example `sudo apt install ffmpeg` or `brew install ffmpeg`)
+
 #### Motion Is Detected Late
 Motion normally arrives in real time over EZVIZ's MQTT push service, with a 30-second poll as a fallback. Look for `MQTT push connected — real-time alerts active` in the log at startup. If it's missing, or the motion log lines show `(poll)` instead of `(MQTT)`, only the fallback is working; enable Debug mode and check the `MQTT` log lines to see why
 
