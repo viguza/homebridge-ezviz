@@ -8,7 +8,7 @@ import {
 } from 'homebridge';
 import { StreamingDelegate } from '../utils/streaming-delegate.js';
 import { HksvRecordingDelegate } from '../utils/hksv-recording-delegate.js';
-import { getRtspUrl } from '../utils/rtsp-url.js';
+import { getCameraLocalIp, getRtspUrl } from '../utils/rtsp-url.js';
 import type { EZVIZPlatform } from '../platform.js';
 import { EZVIZAPI } from '../api/ezviz-api.js';
 import { SwitchTypes } from '../utils/enums.js';
@@ -95,6 +95,12 @@ export class IPCamera {
     this.motionService = this.accessory.getService(this.platform.Service.MotionSensor) ||
       this.accessory.addService(this.platform.Service.MotionSensor);
 
+    if (!getCameraLocalIp(accessory.context.device)) {
+      this.platform.log.warn(
+        `${accessory.context.device.Name}: EZVIZ reported no local IP address (camera offline?). ` +
+        'Live view and recording will fail until it is back online and Homebridge is restarted.',
+      );
+    }
     const rtspUrl = getRtspUrl(accessory.context.device);
 
     // Configure camera controller options

@@ -14,7 +14,7 @@ export interface DeviceData {
   Serial: string;
   Name: string;
   Type: string;
-  Connection: ConnectionInfo;
+  Connection?: ConnectionInfo;
   Wifi?: WifiInfo;
   Status: DeviceStatus;
   Switches?: SwitchItem[];
