@@ -5,31 +5,9 @@ import { Readable, Writable } from 'stream';
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
 import { redactCredentials } from './sanitize.js';
 
-export async function doesFfmpegSupportCodec(codec: string, ffmpegPath: string): Promise<boolean> {
-  if (!codec) {
-    return false;
-  }
-  if (codec === 'copy') {
-    return true;
-  }
-  const output = await execa(ffmpegPath, ['-codecs']);
-  return output.stdout.includes(codec);
-}
-
 export async function getCodecsOutput(ffmpegPath: string): Promise<string> {
   const output = await execa(ffmpegPath, ['-codecs']);
   return output.stdout;
-}
-
-export async function getDefaultEncoder(ffmpegPath: string): Promise<string> {
-  const output = await execa(ffmpegPath, ['-codecs']);
-  const validEncoders = ['h264_omx', 'h264_videotoolbox'];
-  validEncoders.forEach((encoder) => {
-    if (output.stdout.includes(encoder)) {
-      return encoder;
-    }
-  });
-  return 'libx264';
 }
 
 export async function isFfmpegInstalled(ffmpegPath: string): Promise<boolean> {
