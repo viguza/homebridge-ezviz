@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- A startup warning when the ffmpeg bundled via `ffmpeg-for-homebridge` is missing, which can happen when npm skips its install script. The log says whether the system ffmpeg is being used instead or no ffmpeg was found, and how to fix it (see Troubleshooting in the README)
+- Nothing yet
 
 ### Changed
 - Nothing yet
@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - Nothing yet
+
+## [2.2.0] - 2026-09-24
+
+### Added
+- A startup warning when the ffmpeg bundled via `ffmpeg-for-homebridge` is missing, which can happen when npm skips its install script. The log says whether the system ffmpeg is being used instead or no ffmpeg was found, and how to fix it (see Troubleshooting in the README)
+
+### Changed
+- Updated dependencies, including `ffmpeg-for-homebridge` 2.2.2, `axios` and `mqtt`
+
+### Removed
+- Four unused dependencies (`homebridge-lib`, `pick-port`, and the `crypto` and `querystring` packages, which duplicated Node.js built-ins), so the plugin installs fewer packages. This also removes a Node.js 24 compatibility warning during install
 
 ## [2.1.0] - 2026-09-24
 
