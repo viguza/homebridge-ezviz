@@ -91,7 +91,11 @@ export class HksvRecordingDelegate implements CameraRecordingDelegate {
   private configuration?: CameraRecordingConfiguration;
   private active = false;
   private readonly prebuffer: HksvPrebuffer;
-  private process: ChildProcess | null = null;
+  // Keyed by streamId: HomeKit can request a new recording stream before the previous
+  // one's generator has finished draining, so a single shared field would get
+  // overwritten and closeRecordingStream() would end up killing the wrong process,
+  // orphaning the old one against the camera's RTSP connection indefinitely.
+  private readonly processes = new Map<number, ChildProcess>();
 
   constructor(
     private readonly rtspUrl: string,
@@ -135,7 +139,7 @@ export class HksvRecordingDelegate implements CameraRecordingDelegate {
 
     this.log.debug(`HKSV recording stream ${streamId} for ${this.cameraName} starting`);
     const cp = spawn(videoProcessor, args, { env: process.env });
-    this.process = cp;
+    this.processes.set(streamId, cp);
     cp.stderr?.resume();
     cp.on('error', (error) => {
       this.log.error(`HKSV recording ffmpeg for ${this.cameraName} failed to start: ${redactCredentials((error as Error).message)}`);
@@ -171,6 +175,7 @@ export class HksvRecordingDelegate implements CameraRecordingDelegate {
     } catch (error) {
       this.log.debug(`HKSV recording stream ${streamId} for ${this.cameraName} ended: ${(error as Error).message}`);
     } finally {
+      this.processes.delete(streamId);
       this.stopFfmpeg(cp);
     }
   }
@@ -181,21 +186,26 @@ export class HksvRecordingDelegate implements CameraRecordingDelegate {
 
   closeRecordingStream(streamId: number, reason: HDSProtocolSpecificErrorReason | undefined): void {
     this.log.debug(`HKSV recording stream ${streamId} for ${this.cameraName} closed (reason=${reason ?? 'connection closed'})`);
-    if (this.process) {
-      this.stopFfmpeg(this.process);
-      this.process = null;
+    const cp = this.processes.get(streamId);
+    if (cp) {
+      this.processes.delete(streamId);
+      this.stopFfmpeg(cp);
     }
   }
 
   private stopFfmpeg(cp: ChildProcess): void {
-    if (cp.killed) {
+    if (cp.exitCode !== null || cp.signalCode !== null) {
       return;
     }
     cp.kill('SIGTERM');
-    setTimeout(() => {
-      if (!cp.killed) {
+    // cp.killed only reflects that kill() was called, not that the process actually
+    // exited, so it can't be used to decide whether to escalate — track real exit
+    // instead, otherwise a process that ignores SIGTERM never gets force-killed.
+    const forceKill = setTimeout(() => {
+      if (cp.exitCode === null && cp.signalCode === null) {
         cp.kill('SIGKILL');
       }
     }, 2000);
+    cp.once('exit', () => clearTimeout(forceKill));
   }
 }
