@@ -17,7 +17,7 @@ export interface DeviceData {
   Connection: ConnectionInfo;
   Wifi?: WifiInfo;
   Status: DeviceStatus;
-  Switches: SwitchItem[];
+  Switches?: SwitchItem[];
   P2P: P2PItem[];
   ResourceInfo: ResourceInfo;
   DeviceInfo: DeviceInfo;

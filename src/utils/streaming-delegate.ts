@@ -321,7 +321,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       );
     }
 
-    const sleepSwitch = this.deviceData.Switches.find((x) => x.type === SwitchTypes.Sleep);
+    const sleepSwitch = this.deviceData.Switches?.find((x) => x.type === SwitchTypes.Sleep);
     if (sleepSwitch?.enable) {
       command = [
         '-loop',
