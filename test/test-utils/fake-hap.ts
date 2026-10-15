@@ -110,5 +110,6 @@ export function makeFakePlatform() {
     },
     updateAlarmSnapshot: jest.fn(),
     getAlarmSnapshot: jest.fn(),
+    handleMissedMqttAlarm: jest.fn(),
   };
 }
