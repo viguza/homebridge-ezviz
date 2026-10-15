@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nothing yet
 
 ### Fixed
-- Nothing yet
+- Live view showing "No Response" on cameras that stream H.265/HEVC video, such as the EZVIZ C6N ([#51](https://github.com/viguza/homebridge-ezviz/issues/51)). The plugin now checks each camera's video codec and converts non-H.264 streams to the H.264 stream HomeKit negotiated, logging a one-time warning since conversion uses more CPU. H.264 cameras are still passed through unchanged
 
 ### Removed
 - Nothing yet

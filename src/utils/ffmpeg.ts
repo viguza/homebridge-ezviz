@@ -65,6 +65,38 @@ export async function getSnapshot(url: string, customFfmpeg?: string): Promise<B
   return ff.stdout;
 }
 
+/**
+ * Pulls the first video stream's codec out of ffmpeg's input summary, e.g. `hevc` from
+ * "Stream #0:0: Video: hevc (Main), yuvj420p(pc, bt709), 2880x1620". Null if absent.
+ */
+export function parseVideoCodec(ffmpegOutput: string): string | null {
+  const match = ffmpegOutput.match(/Stream #\d+:\d+\S*: Video: (\w+)/);
+  return match ? match[1].toLowerCase() : null;
+}
+
+const PROBE_TIMEOUT_MS = 8_000;
+
+/**
+ * Opens the RTSP stream just long enough for ffmpeg to report its input, and returns the
+ * video codec (null if the camera couldn't be reached or reported no video). With no
+ * output given ffmpeg exits non-zero after printing the input summary, which is expected.
+ */
+export async function probeVideoCodec(url: string, customFfmpeg?: string): Promise<string | null> {
+  const command = [
+    '-hide_banner',
+    '-rtsp_transport', 'tcp',
+    '-timeout', '5000000',
+    // Same trimmed analysis as live view: the codec is known from the RTSP SDP, so
+    // there's no need to sit through ffmpeg's multi-second default analysis.
+    '-probesize', '32768',
+    '-analyzeduration', '500000',
+    '-i', url,
+  ];
+  const videoProcessor = customFfmpeg || pathToFfmpeg as unknown as string || 'ffmpeg';
+  const result = await execa(videoProcessor, command, { env: process.env, reject: false, timeout: PROBE_TIMEOUT_MS });
+  return parseVideoCodec(result.stderr ?? '');
+}
+
 export class FfmpegProcess {
   private ff: execa.ExecaChildProcess<string> | undefined;
   private killTimeout?: NodeJS.Timeout;
