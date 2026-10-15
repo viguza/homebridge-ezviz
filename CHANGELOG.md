@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nothing yet
 
 ### Fixed
-- Nothing yet
+- MQTT push silently stopping after a while, leaving motion to the 30-second poll until the next 12-hour session refresh ([#53](https://github.com/viguza/homebridge-ezviz/issues/53)). When polling catches a motion alert that MQTT never delivered, the plugin now reconnects MQTT (at most once every 10 minutes). MQTT disconnects and reconnects are also logged at info level, so they show up without Debug mode
 
 ### Removed
 - Nothing yet

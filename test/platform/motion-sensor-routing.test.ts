@@ -220,3 +220,52 @@ describe('motion sensor event routing', () => {
     expect(pushed).toHaveLength(0);
   });
 });
+
+describe('EZVIZPlatform MQTT self-heal', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function connectedPlatform(): any {
+    const { platform } = buildHarness();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const internals = platform as any;
+    internals.mqttClient = { stop: jest.fn() };
+    internals.ezvizAPI = {};
+    internals.restartMqtt = jest.fn().mockResolvedValue(undefined);
+    return internals;
+  }
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('reconnects MQTT when a sensor reports a missed alert', () => {
+    const platform = connectedPlatform();
+
+    platform.handleMissedMqttAlarm('Driveway');
+
+    expect(platform.restartMqtt).toHaveBeenCalledTimes(1);
+    expect(platform.log.info).toHaveBeenCalledWith(expect.stringContaining('missed a motion alert for Driveway'));
+  });
+
+  test('reconnects at most once every 10 minutes', () => {
+    jest.useFakeTimers();
+    const platform = connectedPlatform();
+
+    platform.handleMissedMqttAlarm('Driveway');
+    jest.advanceTimersByTime(9 * 60_000);
+    platform.handleMissedMqttAlarm('Front Door');
+    expect(platform.restartMqtt).toHaveBeenCalledTimes(1);
+
+    jest.advanceTimersByTime(60_000);
+    platform.handleMissedMqttAlarm('Front Door');
+    expect(platform.restartMqtt).toHaveBeenCalledTimes(2);
+  });
+
+  test('does nothing when MQTT is not running', () => {
+    const platform = connectedPlatform();
+    platform.mqttClient = null;
+
+    platform.handleMissedMqttAlarm('Driveway');
+
+    expect(platform.restartMqtt).not.toHaveBeenCalled();
+  });
+});

@@ -1,4 +1,11 @@
-import { decodeMqttPayload } from '../../src/utils/mqtt-client';
+jest.mock('axios', () => ({ post: jest.fn() }));
+jest.mock('mqtt', () => ({ connect: jest.fn() }));
+
+import { EventEmitter } from 'events';
+import axios from 'axios';
+import mqtt from 'mqtt';
+import type { Logging } from 'homebridge';
+import { decodeMqttPayload, EzvizMqttClient } from '../../src/utils/mqtt-client';
 
 /**
  * EZVIZ's `ext` field is a comma-separated string whose fields are positional
@@ -73,5 +80,29 @@ describe('decodeMqttPayload', () => {
     const payload = Buffer.from('not json');
 
     expect(() => decodeMqttPayload(payload)).toThrow();
+  });
+});
+
+describe('EzvizMqttClient connection logging', () => {
+  test('logs a lost connection and each reconnect at info level (#53)', async () => {
+    (axios.post as jest.Mock)
+      .mockResolvedValueOnce({ data: { status: 200, data: { clientId: 'client-1' } } })
+      .mockResolvedValueOnce({ data: { status: 200, ticket: 'ticket-1' } });
+    const socket = Object.assign(new EventEmitter(), { subscribe: jest.fn(), end: jest.fn() });
+    (mqtt.connect as jest.Mock).mockReturnValue(socket);
+    const log = { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() } as unknown as Logging;
+
+    const client = new EzvizMqttClient('push.example', 'session', 'user', jest.fn(), log);
+    await client.connect();
+
+    socket.emit('connect', { sessionPresent: false });
+    expect(log.info).not.toHaveBeenCalled();
+
+    socket.emit('offline');
+    socket.emit('connect', { sessionPresent: true });
+    expect(log.info).toHaveBeenCalledWith('MQTT connection lost, reconnecting');
+    expect(log.info).toHaveBeenCalledWith('MQTT reconnected (broker kept session: yes)');
+
+    client.stop();
   });
 });
