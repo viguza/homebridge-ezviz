@@ -147,8 +147,16 @@ export class EzvizMqttClient {
       reconnectPeriod: 5000,
     });
 
+    // mqtt.js reconnects on its own after a drop. Those reconnects are logged at info so
+    // a normal log shows whether the connection was lost around when pushes stopped.
+    let connectedBefore = false;
     client.on('connect', (connack) => {
-      this.log.debug(`MQTT connected (sessionPresent=${connack.sessionPresent})`);
+      if (connectedBefore) {
+        this.log.info(`MQTT reconnected (broker kept session: ${connack.sessionPresent ? 'yes' : 'no'})`);
+      } else {
+        this.log.debug(`MQTT connected (sessionPresent=${connack.sessionPresent})`);
+      }
+      connectedBefore = true;
       // With clean:false the broker may restore a stored session that already has our
       // subscription; re-subscribing is only needed for fresh sessions.
       if (!connack.sessionPresent) {
@@ -193,8 +201,9 @@ export class EzvizMqttClient {
       this.log.debug('MQTT connection closed');
     });
 
+    // Emitted once per outage (not on every failed retry), so this can't flood the log.
     client.on('offline', () => {
-      this.log.debug('MQTT client offline, will reconnect');
+      this.log.info('MQTT connection lost, reconnecting');
     });
 
     this.mqttClient = client;

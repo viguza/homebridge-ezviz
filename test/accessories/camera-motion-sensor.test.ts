@@ -157,6 +157,82 @@ describe('CameraMotionSensor', () => {
   });
 });
 
+/**
+ * MQTT can stay connected while EZVIZ stops pushing to it (#53). An alarm only the poll
+ * saw is reported to the platform so it can reconnect MQTT.
+ */
+describe('CameraMotionSensor missed-MQTT detection', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  // First poll sets the baseline (1000), the next one at +30s sees `nextTime`.
+  async function pollNewAlarm(nextTime = 2000, beforeSecondPoll?: (sensor: CameraMotionSensor) => void) {
+    const getLatestAlarm = jest.fn()
+      .mockResolvedValueOnce({ time: 1000, picUrl: '' })
+      .mockResolvedValue({ time: nextTime, picUrl: '' });
+    const { platform, service, api } = buildHarness(getLatestAlarm);
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
+    await Promise.resolve();
+    beforeSecondPoll?.(sensor);
+    jest.advanceTimersByTime(30_000);
+    await Promise.resolve();
+    return { platform, sensor };
+  }
+
+  test('reports an alarm MQTT never pushed, after a short grace period', async () => {
+    const { platform, sensor } = await pollNewAlarm();
+
+    expect(platform.handleMissedMqttAlarm).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(15_000);
+    expect(platform.handleMissedMqttAlarm).toHaveBeenCalledWith('Front Door');
+
+    sensor.stopPolling();
+  });
+
+  test('does not report an alarm MQTT already pushed', async () => {
+    const { platform, sensor } = await pollNewAlarm(2000, (s) => s.onMqttAlarm());
+
+    jest.advanceTimersByTime(15_000);
+    expect(platform.handleMissedMqttAlarm).not.toHaveBeenCalled();
+
+    sensor.stopPolling();
+  });
+
+  test('does not report an alarm whose push arrives just after the poll', async () => {
+    const { platform, sensor } = await pollNewAlarm();
+
+    jest.advanceTimersByTime(5_000);
+    sensor.onMqttAlarm();
+    jest.advanceTimersByTime(10_000);
+    expect(platform.handleMissedMqttAlarm).not.toHaveBeenCalled();
+
+    sensor.stopPolling();
+  });
+
+  test('does not report when the latest alarm moved back to an older one', async () => {
+    const { platform, sensor } = await pollNewAlarm(500);
+
+    jest.advanceTimersByTime(15_000);
+    expect(platform.handleMissedMqttAlarm).not.toHaveBeenCalled();
+
+    sensor.stopPolling();
+  });
+
+  test('stopPolling cancels a pending check', async () => {
+    const { platform, sensor } = await pollNewAlarm();
+
+    sensor.stopPolling();
+    jest.advanceTimersByTime(15_000);
+    expect(platform.handleMissedMqttAlarm).not.toHaveBeenCalled();
+  });
+});
+
 describe('CameraMotionSensor poll interval', () => {
   beforeEach(() => {
     jest.useFakeTimers();

@@ -7,6 +7,11 @@ export const DEFAULT_MOTION_POLL_INTERVAL_S = 30;
 export const MIN_MOTION_POLL_INTERVAL_S = 5;
 export const MAX_MOTION_POLL_INTERVAL_S = 300;
 const MOTION_WINDOW_MS = 60_000;
+// An MQTT push up to this long before the poll noticed the alarm counts as delivering it
+// (the poll runs every 30s, so it usually sees an alarm well after its push).
+const MQTT_DELIVERED_WINDOW_MS = 90_000;
+// How long a push may trail the poll before the alarm counts as missed by MQTT.
+const MQTT_LATE_GRACE_MS = 15_000;
 
 type MotionSource = 'mqtt' | 'poll';
 
@@ -21,6 +26,8 @@ export class CameraMotionSensor {
   private lastSeenAlarmTime: number | null | undefined = undefined;
   private clearTimer: ReturnType<typeof setTimeout> | null = null;
   private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private lastMqttAlarmAt = 0;
+  private missCheckTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private readonly api: EZVIZAPI,
@@ -41,10 +48,15 @@ export class CameraMotionSensor {
 
   // Called by MQTT — real-time push, trigger immediately regardless of timestamp.
   onMqttAlarm(): void {
+    this.lastMqttAlarmAt = Date.now();
     this.triggerMotion('mqtt');
   }
 
   stopPolling(): void {
+    if (this.missCheckTimer) {
+      clearTimeout(this.missCheckTimer);
+      this.missCheckTimer = null;
+    }
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
@@ -76,6 +88,25 @@ export class CameraMotionSensor {
     this.platform.log.debug(`${this.displayName}: motion cleared`);
   }
 
+  /**
+   * After the poll finds a new alarm, checks whether MQTT pushed it too. MQTT can look
+   * connected while no longer delivering anything, so an alarm only the poll saw is
+   * reported to the platform, which reconnects MQTT. An older timestamp (e.g. the latest
+   * alarm was deleted in the EZVIZ app) isn't a new alarm, so it's never checked.
+   */
+  private checkMqttDelivered(): void {
+    const detectedAt = Date.now();
+    if (this.lastMqttAlarmAt >= detectedAt - MQTT_DELIVERED_WINDOW_MS || this.missCheckTimer) {
+      return;
+    }
+    this.missCheckTimer = setTimeout(() => {
+      this.missCheckTimer = null;
+      if (this.lastMqttAlarmAt < detectedAt) {
+        this.platform.handleMissedMqttAlarm(this.displayName);
+      }
+    }, MQTT_LATE_GRACE_MS);
+  }
+
   // Poll uses change detection: trigger when the REST API alarm timestamp changes,
   // regardless of how old that timestamp is. Clears are handled by the timer only.
   private async poll(): Promise<void> {
@@ -97,8 +128,12 @@ export class CameraMotionSensor {
 
       if (alarm.time !== this.lastSeenAlarmTime) {
         this.platform.log.debug(`${this.displayName}: new alarm via poll (${this.lastSeenAlarmTime} → ${alarm.time})`);
+        const isNewer = this.lastSeenAlarmTime === null || alarm.time > this.lastSeenAlarmTime;
         this.lastSeenAlarmTime = alarm.time;
         this.triggerMotion('poll');
+        if (isNewer) {
+          this.checkMqttDelivered();
+        }
       }
     } catch (error) {
       this.platform.log.error(`${this.displayName}: motion poll failed:`, error);

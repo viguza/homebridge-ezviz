@@ -19,6 +19,8 @@ import { DeviceTypes, CAMERA_DEVICE_TYPES } from './utils/enums.js';
 import { ListDevicesResponse } from './types/devices.js';
 import { DeviceData, AlarmSnapshot } from './types/data.js';
 
+const MQTT_SELF_HEAL_INTERVAL_MS = 10 * 60_000;
+
 /**
  * EZVIZ Platform for Homebridge
  * Handles device discovery, authentication, and accessory management
@@ -32,6 +34,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   private readonly motionSensors: Map<string, CameraMotionSensor[]> = new Map();
   private mqttClient: EzvizMqttClient | null = null;
   private mqttLifecycle: Promise<void> = Promise.resolve();
+  private lastMqttSelfHealAt = 0;
   private pollIntervalSeconds: number | undefined;
   private ezvizAPI: EZVIZAPI | null = null;
   // Latest alarm snapshot URL per device serial, used as a fast path for HomeKit
@@ -355,6 +358,26 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
    */
   getAlarmSnapshot(serial: string): AlarmSnapshot | undefined {
     return this.alarmSnapshots.get(serial);
+  }
+
+  /**
+   * Called by a motion sensor when the poll caught an alarm that MQTT never pushed. The
+   * connection can stay up while EZVIZ stops delivering to it, so reconnect rather than
+   * wait for the next 12h session refresh. Rate-limited, so a camera whose alarms never
+   * arrive over MQTT can't keep the connection cycling.
+   */
+  handleMissedMqttAlarm(displayName: string): void {
+    if (!this.mqttClient || !this.ezvizAPI) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastMqttSelfHealAt < MQTT_SELF_HEAL_INTERVAL_MS) {
+      this.log.debug(`MQTT missed an alert for ${displayName}; reconnected recently, not reconnecting again yet`);
+      return;
+    }
+    this.lastMqttSelfHealAt = now;
+    this.log.info(`MQTT push missed a motion alert for ${displayName} (caught by polling); reconnecting MQTT`);
+    void this.restartMqtt(this.ezvizAPI);
   }
 
   /**
