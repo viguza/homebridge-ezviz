@@ -19,7 +19,8 @@ import {
 } from 'homebridge';
 import { RtpSplitter, reservePorts } from './rtp.js';
 import { SwitchTypes } from './enums.js';
-import { FfmpegProcess, isFfmpegInstalled, getSnapshot, getCodecsOutput } from './ffmpeg.js';
+import { FfmpegProcess, isFfmpegInstalled, getSnapshot, getCodecsOutput, probeVideoCodec } from './ffmpeg.js';
+import { h264LevelName, h264ProfileName } from './h264.js';
 import { readFile } from 'fs';
 import { join } from 'path';
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
@@ -58,6 +59,11 @@ export class StreamingDelegate implements CameraStreamingDelegate {
   private ffmpegSupportsLibfdk_acc = true;
   private deviceData: DeviceData;
   private getAlarmSnapshot?: (serial: string) => AlarmSnapshot | undefined;
+  // HomeKit live view only plays H264. Cameras that already send it are remuxed as-is;
+  // anything else (e.g. H265 on newer EZVIZ models) has to be transcoded.
+  private videoCodec: string | null = null;
+  private videoCodecProbe: Promise<string | null> | null = null;
+  private warnedAboutTranscoding = false;
   controller?: CameraController;
 
   // keep track of sessions
@@ -85,7 +91,12 @@ export class StreamingDelegate implements CameraStreamingDelegate {
         // skip
       });
 
-    // Get the correct video codec
+    // Learn the camera's codec up front so the first live view doesn't wait on it.
+    this.detectVideoCodec().catch(() => {
+      // skip: prepareStream retries the probe
+    });
+
+    // Check which audio codecs this ffmpeg supports
     getCodecsOutput(this.videoProcessor)
       .then((output) => {
         this.ffmpegSupportsLibfdk_acc = output.includes('libfdk_aac');
@@ -93,6 +104,29 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       .catch(() => {
         // skip
       });
+  }
+
+  /**
+   * Resolves the camera's video codec, probing the RTSP stream once and caching the
+   * answer. A failed probe isn't cached, so the next live view tries again.
+   */
+  private detectVideoCodec(): Promise<string | null> {
+    if (this.videoCodec) {
+      return Promise.resolve(this.videoCodec);
+    }
+    if (!this.videoCodecProbe) {
+      this.videoCodecProbe = probeVideoCodec(getRtspUrl(this.deviceData), this.videoProcessor)
+        .catch(() => null)
+        .then((codec) => {
+          this.videoCodecProbe = null;
+          if (codec) {
+            this.videoCodec = codec;
+            this.log.debug(`${this.deviceData.Name} streams ${codec} video`);
+          }
+          return codec;
+        });
+    }
+    return this.videoCodecProbe;
   }
 
   private getOfflineImage(callback: SnapshotRequestCallback): void {
@@ -186,6 +220,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     // constraint in reservePorts only applies to getting consecutive ports *within* a
     // single call, e.g. the twoWayAudioPort pair) — running them in parallel instead of
     // one after another shaves the sum of their round-trips off stream startup time.
+    // The codec probe (normally already cached from startup) runs alongside them too.
     const [
       [returnVideoPort],
       [returnAudioPort],
@@ -196,6 +231,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       reservePorts(),
       reservePorts(2),
       reservePorts(),
+      this.detectVideoCodec(),
     ]);
 
     const sessionInfo: SessionInfo = {
@@ -252,6 +288,8 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     const audioSsrc = sessionInfo.audioSSRC;
     const audioSRTP = sessionInfo.audioSRTP.toString('base64');
 
+    const videoCodecArgs = this.getVideoCodecArgs(videoInfo);
+
     const audioPayloadType = audioInfo.pt;
     const audioMaxBitrate = audioInfo.max_bit_rate;
     const sampleRate = audioInfo.sample_rate;
@@ -259,8 +297,8 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     let command = [
       '-rtsp_transport', 'tcp',
       // ffmpeg's defaults (5s analyzeduration, multi-MB probesize) spend real time
-      // analyzing the input before producing any output, which is unnecessary for a
-      // remux (-c:v copy) of an already-known H264 RTSP source. Trimmed, not zeroed —
+      // analyzing the input before producing any output, which is unnecessary for an
+      // RTSP source whose codec is already known from its SDP. Trimmed, not zeroed —
       // an earlier attempt at -probesize 32 -analyzeduration 0 was too aggressive for a
       // live network source and broke stream start entirely rather than just speeding
       // it up. This is still a large reduction from the 5s/multi-MB defaults.
@@ -269,8 +307,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       '-use_wallclock_as_timestamps', '1',
       '-i', getRtspUrl(this.deviceData),
       '-map', '0:0',
-      '-c:v', 'copy',
-      '-pix_fmt', 'yuv420p',
+      ...videoCodecArgs,
       '-an',
       '-payload_type', videoPayloadType.toString(),
       '-ssrc', videoSsrc.toString(),
@@ -352,6 +389,42 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     }
 
     return command;
+  }
+
+  private getVideoCodecArgs(videoInfo: VideoInfo): Array<string> {
+    if (this.videoCodec === 'h264') {
+      this.log.debug(`Live view for ${this.deviceData.Name}: passing H264 through unchanged`);
+      return ['-c:v', 'copy', '-pix_fmt', 'yuv420p'];
+    }
+
+    if (this.videoCodec && !this.warnedAboutTranscoding) {
+      this.warnedAboutTranscoding = true;
+      this.log.warn(
+        `${this.deviceData.Name} streams ${this.videoCodec.toUpperCase()} video, which HomeKit can't play, ` +
+        'so live view is being converted to H264. This uses noticeably more CPU. If the EZVIZ app lets you ' +
+        'switch this camera\'s video encoding to H.264, doing so avoids the conversion.',
+      );
+    }
+
+    const { width, height, fps, max_bit_rate: bitrate } = videoInfo;
+    this.log.debug(
+      `Live view for ${this.deviceData.Name}: converting ${this.videoCodec ?? 'unknown codec'} ` +
+      `to H264 ${width}x${height}@${fps}fps, ${bitrate}kbps`,
+    );
+    return [
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-profile:v', h264ProfileName(videoInfo.profile),
+      '-level:v', h264LevelName(videoInfo.level),
+      '-preset', 'ultrafast',
+      '-tune', 'zerolatency',
+      // Fit within what HomeKit asked for (EZVIZ main streams can be 2K+), keeping aspect.
+      '-vf', `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2`,
+      '-r', `${fps}`,
+      '-b:v', `${bitrate}k`,
+      '-bufsize', `${bitrate * 2}k`,
+      '-maxrate', `${bitrate}k`,
+    ];
   }
 
   handleStreamRequest(request: StreamingRequest, callback: StreamRequestCallback): void {
