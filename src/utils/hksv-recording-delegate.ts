@@ -4,13 +4,12 @@ import {
   AudioRecordingSamplerate,
   CameraRecordingConfiguration,
   CameraRecordingDelegate,
-  H264Level,
-  H264Profile,
   HDSProtocolSpecificErrorReason,
   Logging,
   RecordingPacket,
 } from 'homebridge';
 import pathToFfmpeg from 'ffmpeg-for-homebridge';
+import { h264LevelName, h264ProfileName } from './h264.js';
 import { parseMp4Boxes } from './mp4-parser.js';
 import { HKSV_PREBUFFER_LENGTH_MS, HksvPrebuffer } from './hksv-prebuffer.js';
 import { redactCredentials } from './sanitize.js';
@@ -33,10 +32,8 @@ function sampleRateHz(rate: AudioRecordingSamplerate): number {
  */
 function buildRecordingArgs(input: string[], configuration: CameraRecordingConfiguration, includeAudio: boolean): string[] {
   const { parameters, resolution } = configuration.videoCodec;
-  const profile = parameters.profile === H264Profile.HIGH ? 'high'
-    : parameters.profile === H264Profile.MAIN ? 'main' : 'baseline';
-  const level = parameters.level === H264Level.LEVEL4_0 ? '4.0'
-    : parameters.level === H264Level.LEVEL3_2 ? '3.2' : '3.1';
+  const profile = h264ProfileName(parameters.profile);
+  const level = h264LevelName(parameters.level);
   const fps = resolution[2];
   // HKSV fragments must start with a keyframe and run for mediaContainerConfiguration's
   // fragmentLength; the selected iFrameInterval is HomeKit's negotiated keyframe cadence

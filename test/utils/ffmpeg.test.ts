@@ -3,7 +3,7 @@ jest.mock('execa', () => jest.fn());
 import { EventEmitter } from 'events';
 import execa from 'execa';
 import { Logging } from 'homebridge';
-import { checkFfmpegAvailability, FfmpegProcess, getSnapshot } from '../../src/utils/ffmpeg';
+import { checkFfmpegAvailability, FfmpegProcess, getSnapshot, parseVideoCodec, probeVideoCodec } from '../../src/utils/ffmpeg';
 import { StreamingDelegate } from '../../src/utils/streaming-delegate';
 
 describe('checkFfmpegAvailability', () => {
@@ -74,5 +74,38 @@ describe('getSnapshot', () => {
     expect(command).toEqual(expect.arrayContaining(['-rtsp_transport', 'tcp']));
     expect(command).toEqual(expect.arrayContaining(['-timeout', '5000000']));
     expect(command).toEqual(expect.arrayContaining(['-i', 'rtsp://example.test/Streaming/Channels/1/']));
+  });
+});
+
+describe('parseVideoCodec', () => {
+  test('reads HEVC from an EZVIZ C6N input summary (issue #51)', () => {
+    const stderr = 'Input #0, rtsp, from \'rtsp://***:***@10.0.0.5:554/Streaming/Channels/1/\':\n' +
+      '  Stream #0:0: Video: hevc (Main), yuvj420p(pc, bt709), 2880x1620, 15 tbr, 90k tbn\n';
+    expect(parseVideoCodec(stderr)).toBe('hevc');
+  });
+
+  test('reads H264, including streams with an id suffix', () => {
+    expect(parseVideoCodec('  Stream #0:0[0x1]: Video: h264 (High), yuv420p, 1920x1080')).toBe('h264');
+  });
+
+  test('ignores audio streams and returns null when there is no video stream', () => {
+    expect(parseVideoCodec('  Stream #0:1: Audio: pcm_alaw, 8000 Hz, mono')).toBeNull();
+    expect(parseVideoCodec('rtsp://***:***@10.0.0.5/: Connection timed out')).toBeNull();
+  });
+});
+
+describe('probeVideoCodec', () => {
+  beforeEach(() => {
+    (execa as unknown as jest.Mock).mockReset();
+  });
+
+  test('opens the stream over TCP without failing on ffmpeg\'s no-output exit code', async () => {
+    (execa as unknown as jest.Mock).mockResolvedValue({ exitCode: 1, stderr: '  Stream #0:0: Video: hevc (Main)' });
+
+    await expect(probeVideoCodec('rtsp://example.test/', 'ffmpeg')).resolves.toBe('hevc');
+
+    const [, command, options] = (execa as unknown as jest.Mock).mock.calls[0];
+    expect(command).toEqual(expect.arrayContaining(['-rtsp_transport', 'tcp', '-i', 'rtsp://example.test/']));
+    expect(options).toEqual(expect.objectContaining({ reject: false }));
   });
 });
