@@ -1467,6 +1467,14 @@
         "description": "Turns on HomeKit Secure Video recording for every camera. Requires a HomeKit Hub (Apple TV or HomePod) and an iCloud+ plan with storage. Runs a continuous background ffmpeg process per camera to maintain a short prebuffer, so only enable this if you actually use Secure Video.",
         "type": "boolean",
         "default": false
+      },
+      "motionPollInterval": {
+        "title": "Motion Poll Interval (seconds)",
+        "description": "How often each camera's alarm history is checked for motion, as a fallback for alerts MQTT push doesn't deliver. Lower values catch those alerts sooner but make one more request to EZVIZ's cloud per camera each time. 5 to 300 seconds.",
+        "type": "integer",
+        "default": 30,
+        "minimum": 5,
+        "maximum": 300
       }
     }
   }

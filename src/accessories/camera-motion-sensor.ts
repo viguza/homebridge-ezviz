@@ -3,7 +3,9 @@ import type { Service } from 'homebridge';
 import type { EZVIZPlatform } from '../platform.js';
 import { EZVIZAPI } from '../api/ezviz-api.js';
 
-const POLL_INTERVAL_MS = 30_000;
+export const DEFAULT_MOTION_POLL_INTERVAL_S = 30;
+export const MIN_MOTION_POLL_INTERVAL_S = 5;
+export const MAX_MOTION_POLL_INTERVAL_S = 300;
 const MOTION_WINDOW_MS = 60_000;
 
 type MotionSource = 'mqtt' | 'poll';
@@ -26,6 +28,7 @@ export class CameraMotionSensor {
     private readonly service: Service,
     private readonly serial: string,
     private readonly displayName: string,
+    pollIntervalSeconds = DEFAULT_MOTION_POLL_INTERVAL_S,
   ) {
     this.service.setCharacteristic(this.platform.Characteristic.Name, `${displayName} Motion`);
 
@@ -33,7 +36,7 @@ export class CameraMotionSensor {
       .onGet(() => this.motionDetected);
 
     this.poll();
-    this.pollInterval = setInterval(() => this.poll(), POLL_INTERVAL_MS);
+    this.pollInterval = setInterval(() => this.poll(), pollIntervalSeconds * 1000);
   }
 
   // Called by MQTT — real-time push, trigger immediately regardless of timestamp.

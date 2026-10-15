@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Nothing yet
+- `motionPollInterval` setting for how often each camera's alarm history is polled as the fallback for motion alerts MQTT push doesn't deliver (default 30 seconds, 5–300). A shorter interval helps automations that need motion quickly, such as turning on lights ([#53](https://github.com/viguza/homebridge-ezviz/issues/53))
 
 ### Changed
 - Nothing yet

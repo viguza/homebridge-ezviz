@@ -2,7 +2,12 @@ import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAcces
 import { SmartPlug } from './accessories/smart-plug.js';
 import { IPCamera } from './accessories/ip-camera.js';
 import { SecuritySystemAccessory } from './accessories/security-system.js';
-import { CameraMotionSensor } from './accessories/camera-motion-sensor.js';
+import {
+  CameraMotionSensor,
+  DEFAULT_MOTION_POLL_INTERVAL_S,
+  MAX_MOTION_POLL_INTERVAL_S,
+  MIN_MOTION_POLL_INTERVAL_S,
+} from './accessories/camera-motion-sensor.js';
 import { EzvizMqttClient } from './utils/mqtt-client.js';
 import { checkFfmpegAvailability } from './utils/ffmpeg.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
@@ -27,6 +32,7 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
   private readonly motionSensors: Map<string, CameraMotionSensor[]> = new Map();
   private mqttClient: EzvizMqttClient | null = null;
   private mqttLifecycle: Promise<void> = Promise.resolve();
+  private pollIntervalSeconds: number | undefined;
   private ezvizAPI: EZVIZAPI | null = null;
   // Latest alarm snapshot URL per device serial, used as a fast path for HomeKit
   // snapshot requests shortly after a motion event instead of a live RTSP grab.
@@ -265,11 +271,37 @@ export class EZVIZPlatform implements DynamicPlatformPlugin {
     // matched on that.
     const serial = device.DeviceInfo.deviceSerial;
     const service = camera.getMotionService();
-    const sensor = new CameraMotionSensor(ezvizAPI, this, service, serial, device.Name);
+    const sensor = new CameraMotionSensor(ezvizAPI, this, service, serial, device.Name, this.motionPollIntervalSeconds());
 
     const sensors = this.motionSensors.get(serial) ?? [];
     sensors.push(sensor);
     this.motionSensors.set(serial, sensors);
+  }
+
+  /**
+   * The configured motion poll interval, clamped to the supported range. Very short
+   * intervals multiply requests to EZVIZ's cloud (one per camera per poll), so values
+   * outside the range are clamped with a warning, logged once.
+   */
+  private motionPollIntervalSeconds(): number {
+    if (this.pollIntervalSeconds !== undefined) {
+      return this.pollIntervalSeconds;
+    }
+    const configured = this.config.motionPollInterval;
+    let seconds = DEFAULT_MOTION_POLL_INTERVAL_S;
+    if (typeof configured === 'number' && Number.isFinite(configured)) {
+      seconds = Math.min(MAX_MOTION_POLL_INTERVAL_S, Math.max(MIN_MOTION_POLL_INTERVAL_S, Math.round(configured)));
+      if (seconds !== configured) {
+        this.log.warn(
+          `motionPollInterval ${configured} is outside ${MIN_MOTION_POLL_INTERVAL_S}-${MAX_MOTION_POLL_INTERVAL_S} seconds, ` +
+          `using ${seconds}`,
+        );
+      }
+    } else if (configured !== undefined) {
+      this.log.warn(`motionPollInterval must be a number of seconds, using the default of ${seconds}`);
+    }
+    this.pollIntervalSeconds = seconds;
+    return seconds;
   }
 
   /**
