@@ -28,4 +28,9 @@ export interface EZVIZConfig extends PlatformConfig {
    * (Apple TV/HomePod) plus iCloud+ storage, so it isn't something every install wants.
    */
   enableHksv?: boolean;
+  /**
+   * Seconds between REST polls of each camera's alarm history, the fallback for motion
+   * events MQTT push doesn't deliver. Clamped to MIN/MAX_MOTION_POLL_INTERVAL_S.
+   */
+  motionPollInterval?: number;
 }

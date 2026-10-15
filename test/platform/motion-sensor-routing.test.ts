@@ -35,7 +35,7 @@ import { CAMERA_DEVICE_TYPES, DeviceTypes } from '../../src/utils/enums';
 
 type Pushed = [string, string, unknown];
 
-function buildHarness() {
+function buildHarness(extraConfig: Record<string, unknown> = {}) {
   const pushed: Pushed[] = [];
   const registered: string[] = [];
 
@@ -103,6 +103,7 @@ function buildHarness() {
       { serial: 'DUAL001', username: 'u', code: 'c', dualCamera: true },
       { serial: 'BATT001', username: 'u', code: 'c' },
     ],
+    ...extraConfig,
   } as unknown as EZVIZConfig;
 
   return { platform: new EZVIZPlatform(log, config, api), pushed, registered };
@@ -267,5 +268,63 @@ describe('EZVIZPlatform MQTT self-heal', () => {
     platform.handleMissedMqttAlarm('Driveway');
 
     expect(platform.restartMqtt).not.toHaveBeenCalled();
+  });
+});
+
+describe('EZVIZPlatform motion poll interval', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function intervalFor(motionPollInterval: unknown): { seconds: number; platform: any } {
+    const { platform } = buildHarness(motionPollInterval === undefined ? {} : { motionPollInterval });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const internals = platform as any;
+    return { seconds: internals.motionPollIntervalSeconds(), platform: internals };
+  }
+
+  test('defaults to 30 seconds without a warning', () => {
+    const { seconds, platform } = intervalFor(undefined);
+    expect(seconds).toBe(30);
+    expect(platform.log.warn).not.toHaveBeenCalled();
+  });
+
+  test('uses a configured value inside the range', () => {
+    const { seconds, platform } = intervalFor(5);
+    expect(seconds).toBe(5);
+    expect(platform.log.warn).not.toHaveBeenCalled();
+  });
+
+  test('clamps values outside 5-300 seconds and warns once', () => {
+    const low = intervalFor(1);
+    expect(low.seconds).toBe(5);
+    low.platform.motionPollIntervalSeconds();
+    expect(low.platform.log.warn).toHaveBeenCalledTimes(1);
+
+    expect(intervalFor(1000).seconds).toBe(300);
+  });
+
+  test('falls back to the default for a non-numeric value', () => {
+    const { seconds, platform } = intervalFor('fast');
+    expect(seconds).toBe(30);
+    expect(platform.log.warn).toHaveBeenCalledWith(expect.stringContaining('must be a number'));
+  });
+
+  test('passes the interval to every motion sensor', () => {
+    jest.useFakeTimers();
+    try {
+      const { platform } = buildHarness({ motionPollInterval: 10 });
+      createSensors(platform);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sensors = [...(platform as any).motionSensors.values()].flat();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const api = (sensors[0] as any).api;
+      (api.getLatestAlarm as jest.Mock).mockClear();
+
+      jest.advanceTimersByTime(10_000);
+      // One poll per sensor (two lenses + one battery camera).
+      expect(api.getLatestAlarm).toHaveBeenCalledTimes(3);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      sensors.forEach((sensor: any) => sensor.stopPolling());
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

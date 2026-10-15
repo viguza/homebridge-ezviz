@@ -232,3 +232,41 @@ describe('CameraMotionSensor missed-MQTT detection', () => {
     expect(platform.handleMissedMqttAlarm).not.toHaveBeenCalled();
   });
 });
+
+describe('CameraMotionSensor poll interval', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  test('polls on the interval it was given', async () => {
+    const { platform, service, api, getLatestAlarm } = buildHarness();
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door', 5);
+    await Promise.resolve();
+    expect(getLatestAlarm).toHaveBeenCalledTimes(1);
+
+    jest.advanceTimersByTime(5_000);
+    expect(getLatestAlarm).toHaveBeenCalledTimes(2);
+    jest.advanceTimersByTime(5_000);
+    expect(getLatestAlarm).toHaveBeenCalledTimes(3);
+
+    sensor.stopPolling();
+  });
+
+  test('defaults to polling every 30 seconds', async () => {
+    const { platform, service, api, getLatestAlarm } = buildHarness();
+    const sensor = new CameraMotionSensor(api, platform as unknown as EZVIZPlatform, service as never, 'CAM001', 'Front Door');
+    await Promise.resolve();
+
+    jest.advanceTimersByTime(29_000);
+    expect(getLatestAlarm).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(1_000);
+    expect(getLatestAlarm).toHaveBeenCalledTimes(2);
+
+    sensor.stopPolling();
+  });
+});
