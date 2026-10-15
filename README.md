@@ -166,6 +166,9 @@ For a complete list of all supported region codes, see [config.schema.json](conf
 - Check network connectivity
 - If the log warns that EZVIZ reported no local IP address for the camera, it was offline when Homebridge started. Bring it back online and restart Homebridge
 
+#### "streams HEVC video, which HomeKit can't play"
+HomeKit live view only plays H.264. Some cameras (for example the C6N) stream H.265/HEVC, so the plugin converts their live view to H.264 with ffmpeg. This works, but uses noticeably more CPU than passing H.264 through, which can matter on a Raspberry Pi or with several cameras. If the EZVIZ app lets you set the camera's video encoding to H.264, doing so avoids the conversion
+
 #### "The bundled ffmpeg from ffmpeg-for-homebridge is missing"
 The plugin ships ffmpeg through the `ffmpeg-for-homebridge` package, which downloads it in an npm install script. Newer npm versions can skip install scripts unless they're approved, leaving the plugin without its ffmpeg. If this warning appears:
 - The plugin falls back to a system-installed `ffmpeg` if there is one (a warning). With no ffmpeg at all (an error), live view, snapshots and recording won't work
