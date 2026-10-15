@@ -8,17 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `motionPollInterval` setting for how often each camera's alarm history is polled as the fallback for motion alerts MQTT push doesn't deliver (default 30 seconds, 5–300). A shorter interval helps automations that need motion quickly, such as turning on lights ([#53](https://github.com/viguza/homebridge-ezviz/issues/53))
+- Nothing yet
 
 ### Changed
 - Nothing yet
 
 ### Fixed
-- Live view showing "No Response" on cameras that stream H.265/HEVC video, such as the EZVIZ C6N ([#51](https://github.com/viguza/homebridge-ezviz/issues/51)). The plugin now checks each camera's video codec and converts non-H.264 streams to the H.264 stream HomeKit negotiated, logging a one-time warning since conversion uses more CPU. H.264 cameras are still passed through unchanged
-- MQTT push silently stopping after a while, leaving motion to the 30-second poll until the next 12-hour session refresh ([#53](https://github.com/viguza/homebridge-ezviz/issues/53)). When polling catches a motion alert that MQTT never delivered, the plugin now reconnects MQTT (at most once every 10 minutes). MQTT disconnects and reconnects are also logged at info level, so they show up without Debug mode
+- Nothing yet
 
 ### Removed
 - Nothing yet
+
+## [2.3.0] - 2026-10-15
+
+### Added
+- `motionPollInterval` setting for how often each camera's alarm history is polled as the fallback for motion alerts MQTT push doesn't deliver (default 30 seconds, 5–300). A shorter interval helps automations that need motion quickly, such as turning on lights ([#53](https://github.com/viguza/homebridge-ezviz/issues/53))
+
+### Fixed
+- Live view showing "No Response" on cameras that stream H.265/HEVC video, such as the EZVIZ C6N ([#51](https://github.com/viguza/homebridge-ezviz/issues/51)). The plugin now checks each camera's video codec and converts non-H.264 streams to the H.264 stream HomeKit negotiated, logging a one-time warning since conversion uses more CPU. H.264 cameras are still passed through unchanged
+- MQTT push silently stopping after a while, leaving motion to the 30-second poll until the next 12-hour session refresh ([#53](https://github.com/viguza/homebridge-ezviz/issues/53)). When polling catches a motion alert that MQTT never delivered, the plugin now reconnects MQTT (at most once every 10 minutes). MQTT disconnects and reconnects are also logged at info level, so they show up without Debug mode
 
 ## [2.2.0] - 2026-09-24
 
